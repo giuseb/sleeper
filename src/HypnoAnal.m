@@ -88,6 +88,7 @@ classdef HypnoAnal < handle
             obj.nblocks = 1;
             obj.block = length(hy);
          end
+         
          obj.hyplen  = obj.block * obj.nblocks;
          obj.hypno   = hy(1:obj.hyplen);
          obj.blocked = reshape(obj.hypno, obj.block, obj.nblocks);
@@ -125,13 +126,21 @@ classdef HypnoAnal < handle
          % duration in seconds for each state scored in the hypnogram
          rv = obj.epochs * obj.epoch;
       end
+      
+      function rv = fractions(obj)
+         % HA.FRACTIONS, where HA is a HypnoAnal object, returns the
+         % fraction of time spent in each state scored in the hypnogram
+         s = sum(obj.epochs);
+         r = repmat(s, obj.nstates, 1);
+         rv = obj.epochs ./ r;
+      end
 
       function rv = episodes(obj)
          % HA.EPISODES, where HA is a HypnoAnal object, returns the number
          % of scored episodes for each state in the hypnogram
          t = obj.changes;
          t(1) = 0;
-         for i=1:obj.n_states
+         for i=1:obj.nstates
             rv(i) = sum(obj.hypno==i & t); %#ok<AGROW>
          end
       end
@@ -141,14 +150,14 @@ classdef HypnoAnal < handle
          % episode durations. It returns a cell array, one cell for each
          % scored state. Each cell contains an array of episode durations
          % in seconds.
-         n = obj.n_states;
+         n = obj.nstates;
          % set up the cell array to be returned
          rv = cell(1, n);
          % use the first epoch as a starting point
          c_stg = obj.hypno(1);
          c_len = 1;
          % loop over each epoch
-         for i=2:length(obj.hypno)
+         for i=2:obj.hyplen
             if obj.changes(i)
                rv{c_stg} = [rv{c_stg}; c_len * obj.epoch];
                c_stg = obj.hypno(i);
@@ -164,7 +173,7 @@ classdef HypnoAnal < handle
          % HA.MEAN_DURATIONS, where HA is a HypnoAnal object, returns the
          % mean episode durations (in seconds) for each state scored in the
          % hypnogram
-         for i = 1:obj.n_states
+         for i = 1:obj.nstates
             rv(i) = mean(obj.durations{i}); %#ok<AGROW>
          end
       end
@@ -173,23 +182,15 @@ classdef HypnoAnal < handle
          % HA.STD_DURATIONS, where HA is a HypnoAnal object, returns the
          % standard deviation of episode durations (in seconds) for each
          % state scored in the hypnogram
-         for i = 1:obj.n_states
+         for i = 1:obj.nstates
             rv(i) = std(obj.durations{i}); %#ok<AGROW>
          end
       end
 
-
-      function rv = fractions(obj)
-         % HA.FRACTIONS, where HA is a HypnoAnal object, returns the
-         % fraction of time spent in each state scored in the hypnogram
-         tots = length(obj.hypno) * obj.epoch;
-         rv = obj.seconds / tots;
-      end
-
       function rv = transitions(obj)
          i = 0;
-         for st1 = 1:length(obj.states)-1
-            for st2 = st1+1:length(obj.states)
+         for st1 = 1:obj.nstates-1
+            for st2 = st1+1:obj.nstates
                i = i+1;
                s1(i) = obj.states(st1);
                s2(i) = obj.states(st2);
@@ -209,10 +210,6 @@ classdef HypnoAnal < handle
 
       function rv = tr_count(obj, st1, st2)
          rv = sum(obj.istransition(st1, st2));
-      end
-
-      function rv = n_states(obj)
-         rv = length(obj.states);
       end
    end
 end
