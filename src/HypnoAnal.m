@@ -102,7 +102,7 @@ classdef HypnoAnal < handle
          % the hypnogram should not contain NaNs; warn if any
          nani = isnan(obj.hypno);
          if any(nani)
-            warning('NaNs in hypnogram at positions: %d', find(nani))
+            error('NaNs in hypnogram at positions: %d', find(nani))
          end
       end
 
