@@ -26,7 +26,7 @@ e1 = sum(hypnogram==1);
 e2 = sum(hypnogram==2);
 e3 = sum(hypnogram==3);
 
-assert(isequal(ha.epochs, [e1, e2, e3]'));
+assert(isequal(ha.epochs, [e1, e2, e3]'))
 ep = [def_epoch*e1; def_epoch*e2; def_epoch*e3];
 assert(isequal(ha.seconds, ep))
 assert(isequal(ha.minutes, ep/60))
@@ -41,8 +41,43 @@ hy = [1 2 3 1 2 3 1 1 1 1 1 1 2 3 2 3 2 3];
 % the 18 epochs will be analyzed in groups of 3
 t = HypnoAnal(hy, 'block', 3);
 out = [
-     1     1     3     3     0     0
-     1     1     0     0     2     1
-     1     1     0     0     1     2
+   1 1 3 3 0 0
+   1 1 0 0 2 1
+   1 1 0 0 1 2
 ];
 assert(isequal(t.epochs, out))
+
+%% Test-07: fractions of time, by state and block
+hy = [1 1 1 1  1 1 2 2  1 2 3 4];
+out = [
+   1  .5  .25
+   0  .5  .25
+   0  0   .25
+   0  0   .25
+];
+t = HypnoAnal(hy, 'block', 4, 'states', {'a' 'b' 'c' 'd'});
+assert(isequal(t.fractions, out))
+
+%% Test-08: getting the number of episodes and the durations
+hy = [1 1 1 3 1   2 1 2 2 1   1 3 3 2 2   2 3 3 3 2];
+out = [
+   2 2 0 0
+   0 2 1 1
+   1 0 1 1
+];
+t = HypnoAnal(hy, 'block', 5);
+assert(isequal(t.episodes, out));
+
+dur = {
+   [30;10], [10;20], [], []
+        [], [10;20], 30, 10
+        10,      [], 20, 30
+};
+assert(isequal(t.durations, dur));
+
+means = [
+   20  15 NaN NaN
+  NaN  15  30  10
+   10 NaN  20  30
+];
+assert(isequaln(t.mean_durations, means));

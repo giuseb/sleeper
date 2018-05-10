@@ -88,14 +88,16 @@ classdef HypnoAnal < handle
             obj.nblocks = 1;
             obj.block = length(hy);
          end
-         
+         % getting the trimmed hypnogram size...
          obj.hyplen  = obj.block * obj.nblocks;
+         % ...and the trimmed hypnogram
          obj.hypno   = hy(1:obj.hyplen);
          obj.blocked = reshape(obj.hypno, obj.block, obj.nblocks);
+         c = [NaN; diff(2.^(obj.hypno-1))];
+         obj.changes = reshape(c, obj.block, obj.nblocks);
          obj.states  = p.Results.States;
          obj.nstates = length(obj.states);
-         obj.epoch   = p.Results.Epoch;
-         obj.changes = [NaN; diff(2.^(obj.hypno-1))];
+         obj.epoch   = p.Results.Epoch;     
 
          % the hypnogram should not contain NaNs; warn if any
          nani = isnan(obj.hypno);
@@ -138,43 +140,62 @@ classdef HypnoAnal < handle
       function rv = episodes(obj)
          % HA.EPISODES, where HA is a HypnoAnal object, returns the number
          % of scored episodes for each state in the hypnogram
-         t = obj.changes;
-         t(1) = 0;
+         t = diff([0; obj.hypno]);
+         r = reshape(t, obj.block, obj.nblocks);
+         rv = zeros(obj.nstates, obj.nblocks);
          for i=1:obj.nstates
-            rv(i) = sum(obj.hypno==i & t); %#ok<AGROW>
+            rv(i,:) = sum(obj.blocked==i & r);
          end
       end
 
       function rv = durations(obj)
          % HA.DURATIONS, where HA is a HypnoAnal object, collects state
-         % episode durations. It returns a cell array, one cell for each
-         % scored state. Each cell contains an array of episode durations
-         % in seconds.
-         n = obj.nstates;
+         % episode durations. It returns a cell matrix, one row for each
+         % state, one column for each block of epochs. Each cell contains
+         % an array of episode durations in seconds.
+
          % set up the cell array to be returned
-         rv = cell(1, n);
+         rv = cell(obj.nstates, obj.nblocks);
+         
+         % get a straightened temporary hypnogram
+         hy = obj.blocked(:);
          % use the first epoch as a starting point
-         c_stg = obj.hypno(1);
-         c_len = 1;
-         % loop over each epoch
-         for i=2:obj.hyplen
-            if obj.changes(i)
-               rv{c_stg} = [rv{c_stg}; c_len * obj.epoch];
-               c_stg = obj.hypno(i);
+         c_stg = hy(1); % the current stage
+         c_len = 1;     % the current episode duration (in epochs)
+         c_blo = 1;     % the current block
+         
+         % find all state changes
+         df = diff(obj.blocked(:));
+         % we don't need the first epoch anymore
+         hy(1) = [];
+         
+         % brute force approach, not very idiomatic, but it seems
+         % complicated to solve otherwise; looping over each epoch...
+         for i=1:obj.hyplen-1
+            if df(i)
+               % we have found a state change, so the duration of the
+               % previous state must be saved
+               rv{c_stg, c_blo} = [rv{c_stg, c_blo}; c_len * obj.epoch];
+               % save the current state and reset vars
+               c_stg = hy(i);
                c_len = 1;
+               c_blo = floor(i/obj.block)+1;
             else
                c_len = c_len + 1;
             end
          end
-         rv{c_stg} = [rv{c_stg}; c_len * obj.epoch];
+         rv{c_stg, c_blo} = [rv{c_stg, c_blo}; c_len * obj.epoch];
       end
 
       function rv = mean_durations(obj)
          % HA.MEAN_DURATIONS, where HA is a HypnoAnal object, returns the
          % mean episode durations (in seconds) for each state scored in the
          % hypnogram
+         rv = zeros(obj.nstates, obj.nblocks);
          for i = 1:obj.nstates
-            rv(i) = mean(obj.durations{i}); %#ok<AGROW>
+            for j = 1:obj.nblocks
+               rv(i, j) = mean(obj.durations{i,j});
+            end
          end
       end
 
@@ -182,8 +203,11 @@ classdef HypnoAnal < handle
          % HA.STD_DURATIONS, where HA is a HypnoAnal object, returns the
          % standard deviation of episode durations (in seconds) for each
          % state scored in the hypnogram
+         rv = zeros(obj.nstates, obj.nblocks);
          for i = 1:obj.nstates
-            rv(i) = std(obj.durations{i}); %#ok<AGROW>
+            for j = 1:obj.nblocks
+               rv(i,j) = std(obj.durations{i,j});
+            end
          end
       end
 
