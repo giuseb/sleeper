@@ -93,7 +93,7 @@ classdef HypnoAnal < handle
          % ...and the trimmed hypnogram
          obj.hypno   = hy(1:obj.hyplen);
          obj.blocked = reshape(obj.hypno, obj.block, obj.nblocks);
-         c = [NaN; diff(2.^(obj.hypno-1))];
+         c = [diff(2.^(obj.hypno-1)); 0];
          obj.changes = reshape(c, obj.block, obj.nblocks);
          obj.states  = p.Results.States;
          obj.nstates = length(obj.states);
@@ -165,7 +165,7 @@ classdef HypnoAnal < handle
          c_blo = 1;     % the current block
          
          % find all state changes
-         df = diff(obj.blocked(:));
+         df = diff(hy);
          % we don't need the first epoch anymore
          hy(1) = [];
          
@@ -192,9 +192,10 @@ classdef HypnoAnal < handle
          % mean episode durations (in seconds) for each state scored in the
          % hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
+         du = obj.durations;
          for i = 1:obj.nstates
             for j = 1:obj.nblocks
-               rv(i, j) = mean(obj.durations{i,j});
+               rv(i, j) = mean(du{i,j});
             end
          end
       end
@@ -204,32 +205,41 @@ classdef HypnoAnal < handle
          % standard deviation of episode durations (in seconds) for each
          % state scored in the hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
+         du = obj.durations;
          for i = 1:obj.nstates
             for j = 1:obj.nblocks
-               rv(i,j) = std(obj.durations{i,j});
+               rv(i,j) = std(du{i,j});
             end
          end
       end
 
       function rv = transitions(obj)
-         i = 0;
-         for st1 = 1:obj.nstates-1
-            for st2 = st1+1:obj.nstates
-               i = i+1;
-               s1(i) = obj.states(st1);
-               s2(i) = obj.states(st2);
-               ct(i) = obj.tr_count(st1, st2);
-               i = i+1;
-               s1(i) = obj.states(st2);
-               s2(i) = obj.states(st1);
-               ct(i) = obj.tr_count(st2, st1);
-            end
+         % HA.TRANSITIONS, where HA is a HypnoAnal object, returns a table
+         % containing counts of all transition types
+         
+         % find all possible state pairs
+         b = combnk(1:obj.nstates, 2);
+         % also use the flipped pairs (e.g. both 1-4 AND 4-1)
+         c = [b; fliplr(b)]';
+         % encode all pairs
+         d = diff(2.^(c-1));
+         % the number of possible combinations
+         n = length(d);
+         % allocating vectors
+         s1 = cell(n, 1);
+         s2 = cell(n, 1);
+         ct = zeros(n, obj.nblocks);
+         % for each state pair...
+         for i = 1:n
+            s1(i) = obj.states(c(1,i));
+            s2(i) = obj.states(c(2,i));
+            ct(i,:) = sum(obj.changes==d(i));
          end
-         rv = table(s1', s2', ct', 'variablenames', {'Before' 'After' 'Count'});
+         rv = table(s1, s2, ct, 'variablenames', {'Before' 'After' 'Count'});
       end
 
       function rv = istransition(obj, st1, st2)
-         rv = obj.hypno(1:end-1)==st1 & obj.hypno(2:end)==st2;
+         rv = obj.blocked(1:end-1)==st1 & obj.hypno(2:end)==st2;
       end
 
       function rv = tr_count(obj, st1, st2)

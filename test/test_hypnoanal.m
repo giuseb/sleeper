@@ -81,3 +81,6 @@ means = [
    10 NaN  20  30
 ];
 assert(isequaln(t.mean_durations, means));
+
+
+
