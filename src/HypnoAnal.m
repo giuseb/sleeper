@@ -53,8 +53,8 @@ classdef HypnoAnal < handle
 
    %----------------------------------------------------------- Properties
    properties (SetAccess = private)
-      hypno
-      states
+      hypno  % the hypnogram, a vector of integers
+      states % the vigilance states as strings, in a cell array
       epoch  % epoch duration in seconds
       block  % number of epochs in a block
       hyplen % number of epochs in the hypnogram
@@ -64,7 +64,6 @@ classdef HypnoAnal < handle
       changes % all the transitions computed as diff
       nblocks % the number of blocks in the hypnogram
       nstates % the number of states in the hypnogram
-      blocked % the hypongram reshaped based on block size
    end
    %------------------------------------------------------- Public Methods
    methods
@@ -92,14 +91,13 @@ classdef HypnoAnal < handle
          obj.hyplen  = obj.block * obj.nblocks;
          % ...and the trimmed hypnogram
          obj.hypno   = hy(1:obj.hyplen);
-         obj.blocked = reshape(obj.hypno, obj.block, obj.nblocks);
          c = [diff(2.^(obj.hypno-1)); 0];
          obj.changes = reshape(c, obj.block, obj.nblocks);
          obj.states  = p.Results.States;
          obj.nstates = length(obj.states);
-         obj.epoch   = p.Results.Epoch;     
+         obj.epoch   = p.Results.Epoch;
 
-         % the hypnogram should not contain NaNs; warn if any
+         % the hypnogram should not contain NaNs; raise error if any
          nani = isnan(obj.hypno);
          if any(nani)
             error('NaNs in hypnogram at positions: %d', find(nani))
@@ -128,7 +126,7 @@ classdef HypnoAnal < handle
          % duration in seconds for each state scored in the hypnogram
          rv = obj.epochs * obj.epoch;
       end
-      
+
       function rv = fractions(obj)
          % HA.FRACTIONS, where HA is a HypnoAnal object, returns the
          % fraction of time spent in each state scored in the hypnogram
@@ -156,22 +154,20 @@ classdef HypnoAnal < handle
 
          % set up the cell array to be returned
          rv = cell(obj.nstates, obj.nblocks);
-         
-         % get a straightened temporary hypnogram
-         hy = obj.blocked(:);
+
+         hy = obj.hypno;
          % use the first epoch as a starting point
          c_stg = hy(1); % the current stage
          c_len = 1;     % the current episode duration (in epochs)
          c_blo = 1;     % the current block
-         
+
          % find all state changes
-         df = diff(hy);
-         % we don't need the first epoch anymore
-         hy(1) = [];
-         
+         df = [0; diff(hy)];
+
          % brute force approach, not very idiomatic, but it seems
-         % complicated to solve otherwise; looping over each epoch...
-         for i=1:obj.hyplen-1
+         % complicated to solve otherwise; looping over each epoch,
+         % starting from the second
+         for i=2:obj.hyplen
             if df(i)
                % we have found a state change, so the duration of the
                % previous state must be saved
@@ -179,7 +175,7 @@ classdef HypnoAnal < handle
                % save the current state and reset vars
                c_stg = hy(i);
                c_len = 1;
-               c_blo = floor(i/obj.block)+1;
+               c_blo = floor((i-1)/obj.block)+1;
             else
                c_len = c_len + 1;
             end
@@ -216,7 +212,7 @@ classdef HypnoAnal < handle
       function rv = transitions(obj)
          % HA.TRANSITIONS, where HA is a HypnoAnal object, returns a table
          % containing counts of all transition types
-         
+
          % find all possible state pairs
          b = combnk(1:obj.nstates, 2);
          % also use the flipped pairs (e.g. both 1-4 AND 4-1)
@@ -237,13 +233,9 @@ classdef HypnoAnal < handle
          end
          rv = table(s1, s2, ct, 'variablenames', {'Before' 'After' 'Count'});
       end
-
-      function rv = istransition(obj, st1, st2)
-         rv = obj.blocked(1:end-1)==st1 & obj.hypno(2:end)==st2;
-      end
-
-      function rv = tr_count(obj, st1, st2)
-         rv = sum(obj.istransition(st1, st2));
+      
+      function rv = blocked(obj)
+         rv = reshape(obj.hypno, obj.block, obj.nblocks);
       end
    end
 end
