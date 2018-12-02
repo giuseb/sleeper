@@ -82,5 +82,21 @@ means = [
 ];
 assert(isequaln(t.mean_durations, means));
 
+%% Test-09: playing with markers
+hy = [1 1 1 3 1   2 1 2 2 1   1 3 3 2 2   2 3 3 3 2];
 
+st(1).start_pos  = 1234;
+st(1).finish_pos = 1901;
+st(1).tag = 'SWD';
 
+st(2).start_pos  = 4022;
+st(2).finish_pos = 6234;
+st(2).tag = 'SWD';
+
+st(3).start_pos  = 9100;
+st(3).finish_pos = 9900;
+st(3).tag = 'Art';
+
+t = HypnoAnal(hy, 'markers', st, 'block', 5);
+x = t.mark_counts;
+assert(isequal(x, [1 1 0 0 0   0 0 0 0 0   0 0 0 0 0   0 0 0 0 0]));

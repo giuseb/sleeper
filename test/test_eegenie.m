@@ -36,10 +36,10 @@ assert(isequal(ha.States, def_states))
 assert(ha.Epoch == def_epoch)
 
 %% Test-03: different parameters can be defined at object creation
-st =  {'uno', 'due'};
+stt =  {'uno', 'due'};
 ep = 4;
-t = EEGenie('hyp', hypnogram, 'states', st, 'epoch', ep);
-assert(isequal(t.States, st));
+t = EEGenie('hyp', hypnogram, 'states', stt, 'epoch', ep);
+assert(isequal(t.States, stt));
 assert(t.Epoch == ep)
 
 %% Test-04: epoch, seconds, minutes
@@ -130,6 +130,7 @@ assert(isequal(me.totals, [2 3]))
 me = EEGenie('mark', st);
 me.replacetag('SWD', 'xxx');
 assert(isequal(me.Tags, {'Art' 'xxx'}))
+
 %% Test-14: counting events per epoch
 me = EEGenie('mark', st);
 mm = me.events_per_epoch;
