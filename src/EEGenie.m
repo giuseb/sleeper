@@ -1,4 +1,61 @@
 classdef EEGenie < handle
+   %EEGenie: simple calculations on hypnograms and EEG events
+   %
+   %   The EEGenie class helps to analyze vigilance states and “events”,
+   %   scored/detected on the basis of video-EEG-EMG recordings.
+   %
+   %   Typically, one would feed EEGenie with the output of the program
+   %   “sleeper”, which generates: 1) hypnograms, i.e. arbitrarily long
+   %   sequences of epochs (usually a few seconds each) labeled depending
+   %   on the vigilance state scored during that period; 2) “markers”, i.e.
+   %   events described with a label (tag), start, and end times.
+   %
+   % WIP
+   %
+   %   The HYPNOANAL constructor takes one such vector as a mandatory
+   %   argument and returns a HYPNOANAL object:
+   %
+   %   ha = HYPNOANAL(hyp)
+   %
+   %   The following name/value pair parameters may be added to the
+   %   constructor call:
+   %
+   %   ha = HYPNOANAL(hyp, 'Epoch', s) specifies the epoch duration in
+   %   seconds (default is 10).
+   %
+   %   ha = HYPNOANAL(hyp, 'States', {'REM', 'NREM', 'Wake'}) specifies the
+   %   states (those shown here are the defaults); every "1" in the
+   %   hystogram vector is interpreted as 'REM', every "2" is 'NREM', and
+   %   so on.
+   %
+   %   You can verify these values by simply typing the object variable
+   %   name at the command line:
+   %
+   %   >> ha
+   %
+   %     HypnoAnal with properties:
+   %
+   %       hypno: [450×1 double]
+   %      states: {'REM'  'NREM'  'Wake'}
+   %       epoch: 10
+   %
+   %   The HYPNOANAL object responds to the following aggregate methods,
+   %   which return an an array with as many elements as there are states
+   %   (in the order specified at object creation):
+   %
+   %   - ha.epochs
+   %   - ha.minutes
+   %   - ha.seconds
+   %   - ha.episodes
+   %   - ha.durations
+   %   - ha.mean_durations
+   %   - ha.std_durations
+   %   - ha.fractions
+   %
+   %   In addition, ha.transitions returns a table with the number of all
+   %   possible transitions
+   %
+
    properties (SetObservable)
       EEG
       Hypno

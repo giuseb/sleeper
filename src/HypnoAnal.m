@@ -58,6 +58,8 @@ classdef HypnoAnal < handle
       epoch  % epoch duration in seconds
       block  % number of epochs in a block
       hyplen % number of epochs in the hypnogram
+      hz     % EEG sampling rate in Hertz
+      marks  % markers, list of events
    end
 
    properties (Access = private)
@@ -74,6 +76,8 @@ classdef HypnoAnal < handle
          p.addParameter('Epoch', 10, @isnumscalar)
          p.addParameter('States', {'REM', 'NREM', 'Wake'}, @iscellstr)
          p.addParameter('Block', 0, @isnumscalar)
+         p.addParameter('Markers', HypnoAnal.mrkstr, @isstruct)
+         p.addParameter('Hz', 400, @isnumscalar)
          p.parse(hypnogram, varargin{:})
 
          hy = p.Results.hypnogram(:); % enforce vertical!
@@ -96,6 +100,8 @@ classdef HypnoAnal < handle
          obj.states  = p.Results.States;
          obj.nstates = length(obj.states);
          obj.epoch   = p.Results.Epoch;
+         obj.marks   = p.Results.Markers;
+         obj.hz      = p.Results.Hz;
 
          % the hypnogram should not contain NaNs; raise error if any
          nani = isnan(obj.hypno);
@@ -234,8 +240,29 @@ classdef HypnoAnal < handle
          rv = table(s1, s2, ct, 'variablenames', {'Before' 'After' 'Count'});
       end
       
+      function rv = mark_count(obj, tag)
+         % samples per epoch
+         spe = obj.hz * obj.epoch;
+         % find all markers tagged with tag
+         x = ismember({obj.marks.tag}, tag);
+         beg = [obj.marks.start_pos];
+         fin = [obj.marks.finish_pos];
+         em = floor(beg / spe) + 1;
+         rv = 0;
+      end
+      
       function rv = blocked(obj)
          rv = reshape(obj.hypno, obj.block, obj.nblocks);
+      end
+   end
+   
+   methods(Static)
+      function rv = mrkstr
+         % the same function appears in sleeper. consider drying up
+         rv = struct( ...
+            'start_pos', {}, ...
+            'finish_pos', {}, ...
+            'tag', '');
       end
    end
 end
