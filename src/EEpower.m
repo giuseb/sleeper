@@ -23,7 +23,6 @@ classdef EEpower < handle
    %   Kovrl:  kernel overlap fraction (default is 0.5)
    %   HzMin:  the minimum frequency of interest (0 Hz by default)
    %   HzMax:  the maximum frequency of interest (30 Hz by default)
-   %   HzRes:  the frequency resolution (1 Hz by default)
    %   wType:  the window type ('hanning' by default); choose between:
    %           hann, hamming, blackman, blackmanharris, kaiser
    %
@@ -53,7 +52,6 @@ classdef EEpower < handle
       Kovrl     % kernel overlap fraction   (default: 0.5)
       HzMin     % minimum plotted frequency (default: 0)
       HzMax     % maximum plotted frequency (default: 30)
-      HzRes     % the frequency resolution  (default: 1)
       wType     % the window type (default: 'hanning')
    end
    properties
@@ -87,7 +85,6 @@ classdef EEpower < handle
          p.addParameter('Kovrl', .5, @isnumscalar)
          p.addParameter('HzMin',  0, @isnumscalar)
          p.addParameter('HzMax', 30, @isnumscalar)
-         p.addParameter('HzRes',  1, @isnumscalar)
          p.addParameter('Delta', [ 0.5   4.0], @isnumvector)
          p.addParameter('Theta', [ 4.5,  7.5], @isnumvector)
          p.addParameter('Alpha', [ 8.0, 15.0], @isnumvector)
@@ -102,14 +99,13 @@ classdef EEpower < handle
          obj.Kovrl = p.Results.Kovrl;
          obj.HzMin = p.Results.HzMin;
          obj.HzMax = p.Results.HzMax;
-         obj.HzRes = p.Results.HzRes;
          obj.wType = p.Results.wType;
          obj.Delta = p.Results.Delta;
          obj.Theta = p.Results.Theta;
          obj.Alpha = p.Results.Alpha;
          obj.Beta  = p.Results.Beta;
          
-         lprops = { 'Epoch' 'Ksize' 'HzMin' 'HzMax' 'HzRes' 'wType'};
+         lprops = { 'Epoch' 'Ksize' 'HzMin' 'HzMax' 'wType'};
          obj.addlistener(lprops, 'PostSet', @obj.HandleProps);
          obj.update_parameters
       end
