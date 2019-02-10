@@ -1,70 +1,47 @@
 classdef EEGenie < handle
    %EEGenie: simple calculations on hypnograms and EEG events
    %
-   %   The EEGenie class helps to analyze vigilance states and “events”,
-   %   scored/detected on the basis of video-EEG-EMG recordings.
+   %   Analyzing vigilance states and “events”, scored/detected on the
+   %   basis of video-EEG-EMG recordings.
    %
-   %   Typically, one would feed EEGenie with the output of the program
-   %   “sleeper”, which generates: 1) hypnograms, i.e. arbitrarily long
-   %   sequences of epochs (usually a few seconds each) labeled depending
-   %   on the vigilance state scored during that period; 2) “markers”, i.e.
-   %   events described with a label (tag), start, and end times.
+   %   Objects of the EEGenie class operate on one or more of the following:
+   %   * an EEG signal: an array of floats representing the potentials at
+   %   the original sampling rate
+   %   * a hypnogram: an array of integers representing sequences of epochs
+   %   (usually a few seconds each) labeled depending on the vigilance
+   %   state scored during that period
+   %   * a set of markers: events occurring during the recording, described
+   %   with a label (tag), start, and end times.
    %
-   % WIP
+   %   To create an empty EEGenie object with default parameters:
    %
-   %   The HYPNOANAL constructor takes one such vector as a mandatory
-   %   argument and returns a HYPNOANAL object:
+   %   >> EG = EEGenie
    %
-   %   ha = HYPNOANAL(hyp)
+   %   Data can be added to the object like so:
    %
-   %   The following name/value pair parameters may be added to the
-   %   constructor call:
+   %   >> EG.EEG = eeg;
    %
-   %   ha = HYPNOANAL(hyp, 'Epoch', s) specifies the epoch duration in
-   %   seconds (default is 10).
-   %
-   %   ha = HYPNOANAL(hyp, 'States', {'REM', 'NREM', 'Wake'}) specifies the
-   %   states (those shown here are the defaults); every "1" in the
-   %   hystogram vector is interpreted as 'REM', every "2" is 'NREM', and
-   %   so on.
-   %
-   %   You can verify these values by simply typing the object variable
-   %   name at the command line:
-   %
-   %   >> ha
-   %
-   %     HypnoAnal with properties:
-   %
-   %       hypno: [450×1 double]
-   %      states: {'REM'  'NREM'  'Wake'}
-   %       epoch: 10
-   %
-   %   The HYPNOANAL object responds to the following aggregate methods,
-   %   which return an an array with as many elements as there are states
-   %   (in the order specified at object creation):
-   %
-   %   - ha.epochs
-   %   - ha.minutes
-   %   - ha.seconds
-   %   - ha.episodes
-   %   - ha.durations
-   %   - ha.mean_durations
-   %   - ha.std_durations
-   %   - ha.fractions
-   %
-   %   In addition, ha.transitions returns a table with the number of all
-   %   possible transitions
-   %
+   %   Type “doc EEGenie” at the command line or click below for more help
 
    properties (SetObservable)
       EEG
-      Hypno
-      States
-      Epoch
-      Block
+      Hypno     % hypnogram
+      States    % scoring states
+      Epoch     % scoring epoch in seconds
+      Block     % number of epochs in an analysis block 
       Markers   % the markers structure
       SRate     % the EEG signal's sampling rate
       TOI       % tag of interest
+      Ksize     % kernel size for spectral analysis of events (in seconds)
+      Kover     % kernel overlap fraction   (default: 0.5)
+      HzMin     % minimum plotted frequency (default: 0)
+      HzMax     % maximum plotted frequency (default: 30)
+      wType     % the window type (default: 'hanning')
+      Delta     % the Delta band (default: [ 0.5   4.0])
+      Theta     % the Theta band (default: [ 4.5,  7.5])
+      Alpha     % the Alpha band (default: [ 8.0, 15.0])
+      Beta      % the Beta  band (default: [15.5, 30.0])
+      Verbose
    end
    
    properties (SetAccess = private)
@@ -77,6 +54,7 @@ classdef EEGenie < handle
       nblocks % the number of blocks in the hypnogram
       nstates % the number of states in the hypnogram
       aidx    % the indices of events tagged with the TOI
+      spk     % the number of samples for the given kernel duration (Ksize)
       ntags
       NoHyp
       NoMrk
@@ -84,34 +62,139 @@ classdef EEGenie < handle
    
    methods %-------------------------------------------------- CONSTRUCTOR
       function obj = EEGenie(varargin)
-         % parameter parsing
+         %   Input data and other parameters can be provided at construction time
+         %   as name/value “argument pairs”, e.g.
+         %
+         %   >> hypnogram = [1 1 2 3 2 3 2 2 3 2 2 1 2]
+         %   >> ee = EEGenie('hyp', hypnogram)
+         %
+         %   or can be added to a previously created object, like so:
+         %
+         %   >> ee = EEGenie
+         %   >> ee.Hypno = hypnogram
+         
+         % This constructor works on the assumption that no magic numbers
+         % are stored in the code, all default parameters are written in
+         % the file eegenie.yml, in the src directory. To change any values
+         % upon construction, a custom YAML file can be passed (via the
+         % PFile argument), but individual name-value pairs have
+         % precedence, when given.
+         
+         % the list of all possible arguments, with a default "null" value
+         % and a validation function handle
+         args = {
+            'PFile',      '', @ishstring;
+            'EEG',        [], @isnumvector;
+            'Hypno',      [], @isnumvector;
+            'Markers',    [], @isstruct;
+            'States',     {}, @iscellstr;
+            'Epoch',      -1, @isnumscalar;
+            'Block',      -1, @isnumscalar;
+            'TOI',        '', @ishstring;
+            'SRate',      -1, @isnumscalar;
+            'Ksize',      -1, @isnumscalar;
+            'Kover',      -1, @isnumscalar;
+            'HzMin',      -1, @isnumscalar;
+            'HzMax',      -1, @isnumscalar;
+            'Delta',      [], @isnumvector;
+            'Theta',      [], @isnumvector;
+            'Alpha',      [], @isnumvector;
+            'Beta',       [], @isnumvector;
+            'wType',      '', @ishstring;
+            'Verbose', false, @islogical;
+            };
+
+         % input argument parsing
          p = inputParser;
-         p.addParameter('EEG',    [], @isnumvector)
-         p.addParameter('Epoch',  10, @isnumscalar)
-         p.addParameter('SRate', 400, @isnumscalar)
-         p.addParameter('Hypno',  [], @isnumvector)
-         p.addParameter('States', {'REM', 'NREM', 'Wake'}, @iscellstr)
-         p.addParameter('Block',   0, @isnumscalar)
-         p.addParameter('Markers', [])
-         p.addParameter('TOI',    'SWD', @ischar)
+         for i=1:length(args)
+            p.addParameter(args{i,1}, args{i,2}, args{i,3})
+         end
          p.parse(varargin{:})
          
-         % assigning parameters to properties
-         obj.EEG     = p.Results.EEG;
-         obj.Block   = p.Results.Block;
-         obj.Epoch   = p.Results.Epoch;
-         obj.SRate   = p.Results.SRate;
-         obj.States  = p.Results.States;
-         obj.TOI     = p.Results.TOI;
-         obj.Markers = p.Results.Markers;
-         obj.Hypno   = p.Results.Hypno(:); % enforce vertical!
+         % grab default parameters
+         y = readparams('eegenie.yml', 'eegenie');
+         % if an optional params YAML file was given...
+         if ~isempty(p.Results.PFile)
+            % read the corresponding YAML file
+            ty = readparams([p.Results.PFile '.yml'], 'eegenie');
+            % merge those parameters with the defaults
+            for f = fieldnames(ty)'
+               y.(f) = ty.(f);
+            end
+         end
          
-         % setting up observables
-         lprops = { 'Epoch' 'EEG' 'SRate' 'Markers' 'States' 'Hypno' 'Block' 'TOI'};
-         obj.addlistener(lprops, 'PostSet', @obj.HandleProps);
+         % transfer all parameters to the object
+         % (excluding PFile!)
+         for i=2:length(args)
+            a = args{i,1}; % the field
+            % has this parametere been passed as an input argument?
+            passed = ~isequal(p.Results.(a), args{i,2});
+            % if so, then override the default
+            obj.(a)=cas(passed, p.Results.(a), getfieldi(y,a));
+         end
          
-         % update all internals
+         % special treatment for this one
+         obj.Hypno = obj.Hypno(:); % enforce vertical!
+         
+         % make object react if a parameter is set later on
+         obj.addlistener(args(2:end,1), 'PostSet', @obj.HandleProps);
          obj.update_parameters
+      end
+   end
+   
+   methods %-------------------------------------------------- EEG
+      function notcheby(obj, fn)
+         % EG.NOTCHEBY  applies a notch a and bandpass chebyshev2 filter to
+         % the EEG vector
+         if isempty(obj.EEG)
+            disp('No EEG to filter')
+            return
+         end
+         
+         if nargin==1
+            obj.EEG = notcheby(obj.EEG);
+         else
+            obj.EEG = notcheby(obj.EEG, fn);
+         end
+      end
+      
+      function rv = spectra(obj)
+         % EG.SPECTRA computes power spectra over each of the events
+         % tagged with the TOI in the markers array
+         
+         % retrieve start and end stamps for the currently tagged markers
+         stimes = obj.ssv;
+         etimes = obj.esv;
+         
+         % number of TOI-tagged markers
+         nm = length(stimes);
+         
+         % spectra will be placed here
+         rv = [];
+         
+         for i = 1:nm
+            if obj.Verbose
+               fprintf('Marker %d of %d\n', i, nm)
+            end
+            % num of samples in fragment
+            dt = etimes(i)-stimes(i)+1;
+            % num of samples after the last whole kernel duration
+            tte = rem(dt, obj.SRate);
+            % round up to the next kernel if necessary
+            if tte > 0
+               etimes(i) = etimes(i) + obj.spk - tte;
+            end
+            % the EEG fragment to analyze
+            eeg = obj.EEG(stimes(i):etimes(i));
+            % the epoch needed by EEpower should be equal to the length of
+            % the EEG fragment, so that only one spectrum is computed
+            ep = EEpower(eeg, 'SRate', obj.SRate, ...
+                              'Ksize', obj.Ksize, ...
+                              'Epoch', 0, ...
+                              'Kover', obj.Kover);
+            ee = ep.spectra;
+            rv = [rv ee]; %#ok<AGROW>
+         end
       end
    end
    
@@ -120,7 +203,7 @@ classdef EEGenie < handle
       %------ AGGREGATE METHODS, returning one element per state
       
       function rv = epochs(obj)
-         % HA.EPOCHS, where HA is an EEGenie object, returns the number of
+         % EG.EPOCHS, where HA is an EEGenie object, returns the number of
          % epochs for each state scored in the hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
          for i=1:obj.nstates
@@ -129,19 +212,19 @@ classdef EEGenie < handle
       end
       
       function rv = minutes(obj)
-         % HA.MINUTES, where HA is an EEGenie object, returns the total
+         % EG.MINUTES, where HA is an EEGenie object, returns the total
          % duration in minutes for each state scored in the hypnogram
          rv = obj.seconds / 60;
       end
       
       function rv = seconds(obj)
-         % HA.SECONDS, where HA is an EEGenie object, returns the total
+         % EG.SECONDS, where HA is an EEGenie object, returns the total
          % duration in seconds for each state scored in the hypnogram
          rv = obj.epochs * obj.Epoch;
       end
       
       function rv = fractions(obj)
-         % HA.FRACTIONS, where HA is an EEGenie object, returns the
+         % EG.FRACTIONS, where HA is an EEGenie object, returns the
          % fraction of time spent in each state scored in the hypnogram
          s = sum(obj.epochs);
          r = repmat(s, obj.nstates, 1);
@@ -149,7 +232,7 @@ classdef EEGenie < handle
       end
       
       function rv = episodes(obj)
-         % HA.EPISODES, where HA is an EEGenie object, returns the number
+         % EG.EPISODES, where HA is an EEGenie object, returns the number
          % of scored episodes for each state in the hypnogram
          t = diff([0; obj.Hypno]);
          r = reshape(t, obj.Block, obj.nblocks);
@@ -160,7 +243,7 @@ classdef EEGenie < handle
       end
       
       function rv = durations(obj)
-         % HA.DURATIONS, where HA is an EEGenie object, collects state
+         % EG.DURATIONS, where HA is an EEGenie object, collects state
          % episode durations. It returns a cell matrix, one row for each
          % state, one column for each block of epochs. Each cell contains
          % an array of episode durations in seconds.
@@ -197,7 +280,7 @@ classdef EEGenie < handle
       end
       
       function rv = mean_durations(obj)
-         % HA.MEAN_DURATIONS, where HA is an EEGenie object, returns the
+         % EG.MEAN_DURATIONS, where HA is an EEGenie object, returns the
          % mean episode durations (in seconds) for each state scored in the
          % hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
@@ -210,7 +293,7 @@ classdef EEGenie < handle
       end
       
       function rv = std_durations(obj)
-         % HA.STD_DURATIONS, where HA is an EEGenie object, returns the
+         % EG.STD_DURATIONS, where HA is an EEGenie object, returns the
          % standard deviation of episode durations (in seconds) for each
          % state scored in the hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
@@ -223,7 +306,7 @@ classdef EEGenie < handle
       end
       
       function rv = transitions(obj)
-         % HA.TRANSITIONS, where HA is an EEGenie object, returns a table
+         % EG.TRANSITIONS, where HA is an EEGenie object, returns a table
          % containing counts of all transition types
          
          % find all possible state pairs
@@ -307,7 +390,6 @@ classdef EEGenie < handle
       end
       
       function set_rms(obj)
-         
          ss = obj.ssv(idx);
          es = obj.esv(idx);
          id = find(idx);
@@ -330,7 +412,6 @@ classdef EEGenie < handle
             obj.Markers(id(i)).rms = rms(frag);
          end
       end
-      
    end
    
    methods (Static)
@@ -354,7 +435,6 @@ classdef EEGenie < handle
          rv = [obj.Markers(obj.aidx).finish_pos];
       end
       
-      
       % resetting tag info after changes
       function obj = settags(obj)
          obj.Tags  = unique({obj.Markers.tag});
@@ -368,6 +448,7 @@ classdef EEGenie < handle
       
       function update_parameters(obj)
          obj.nstates = length(obj.States);
+         obj.spk     = obj.Ksize * obj.SRate;
          
          % checking Markers
          m = obj.Markers;

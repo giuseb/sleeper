@@ -13,18 +13,28 @@ classdef EEpower < handle
    %
    %   eep = EEpower(EEG, SRate) creates an EEpower object based on a
    %   single EEG (or other type of) signal, given as a one-dimensional
-   %   vector, sampled at SRate Hertz.
+   %   numeric vector.
    %
-   %   eep = EEpower(EEG, SRate, 'name', value, ...)
+   %   eep = EEpower(EEG, 'name', value, ...)
    %
-   %   The following name-value pairs can be added as optional arguments:
-   %   Epoch:  time over which spectra are computed (10 sec by default)
-   %   Ksize:  length of the moving kernel (2 sec by default)
-   %   Kovrl:  kernel overlap fraction (default is 0.5)
-   %   HzMin:  the minimum frequency of interest (0 Hz by default)
-   %   HzMax:  the maximum frequency of interest (30 Hz by default)
-   %   wType:  the window type ('hanning' by default); choose between:
+   %   Default parameters are stored in a separate YAML file. To view them:
+   %   >> edit eepower.yml
+   %   
+   %   The following name-value pairs can be added to the constructor in
+   %   order to override defaults:
+   %
+   %   SRate:  signal sample rate in Hz
+   %   Epoch:  time over which spectra are computed (seconds)
+   %   Ksize:  length of the moving kernel (seconds)
+   %   Kover:  kernel overlap (fraction)
+   %   wType:  the kernel window type; choose between:
    %           hann, hamming, blackman, blackmanharris, kaiser
+   %   HzMin:  the minimum frequency of interest (Hz)
+   %   HzMax:  the maximum frequency of interest (Hz)
+   %   Delta:  delta-band frequency range (Hz)
+   %   Theta:  theta-band frequency range (Hz)
+   %   Alpha:  alpha-band frequency range (Hz)
+   %   Beta:   beta-band frequency range (Hz)
    %
    %   ---<===[[[ Public methods ]]]===>---
    %
@@ -38,7 +48,6 @@ classdef EEpower < handle
    %----------------------------------------------------------- Properties
    properties (SetAccess = private)
       EEG       % the actual EEG signal
-      SRate     % signal sampling rate
       NumEpochs % the number of epochs in the data file
       MaxPwr    % maximum power computed over the entire signal
       MinPwr    % minimum power computed over the entire signal
@@ -47,14 +56,13 @@ classdef EEpower < handle
       HzRange   % the frequencies of interest
    end
    properties (SetObservable)
+      SRate     % signal sampling rate
       Epoch     % scoring epoch in seconds  (default: 10)      
       Ksize     % kernel size in seconds    (default: 2)
-      Kovrl     % kernel overlap fraction   (default: 0.5)
+      Kover     % kernel overlap fraction   (default: 0.5)
       HzMin     % minimum plotted frequency (default: 0)
       HzMax     % maximum plotted frequency (default: 30)
       wType     % the window type (default: 'hanning')
-   end
-   properties
       Delta     % the Delta band (default: [ 0.5   4.0])
       Theta     % the Theta band (default: [ 4.5,  7.5])
       Alpha     % the Alpha band (default: [ 8.0, 15.0])
@@ -74,39 +82,65 @@ classdef EEpower < handle
    %------------------------------------------------------- Public Methods
    methods
       %------------------------------------------------------- Constructor
-      function obj = EEpower(eeg, SRate, varargin)
+      function obj = EEpower(eeg, varargin)
          % type >> help EEpower for help on how to use the EEpower class
          % constructor
+         
+         % This constructor works on the assumption that no magic numbers
+         % are stored in the code, all default parameters are written in
+         % the file eepower.yml, in the src directory. To change any values
+         % upon construction, a custom YAML file can be passed (via the
+         % PFile argument), but individual name-value pairs have
+         % precedence, when given.
+
+         % the list of all possible arguments, with a default "null" value
+         % and a validation function handle
+         args = {
+            'PFile',  '', @ishstring;
+            'SRate',  [], @isnumscalar;
+            'Epoch',  -1, @isnumscalar;
+            'Ksize',  -1, @isnumscalar;
+            'Kover',  -1, @isnumscalar;
+            'HzMin',  -1, @isnumscalar;
+            'HzMax',  -1, @isnumscalar;
+            'Delta',  [], @isnumvector;
+            'Theta',  [], @isnumvector;
+            'Alpha',  [], @isnumvector;
+            'Beta',   [], @isnumvector;
+            'wType',  '', @ishstring;
+            };
+         
+         % input arguments parsing
          p = inputParser;
-         p.addRequired( 'EEG',       @isnumvector)
-         p.addRequired( 'SRate',     @isnumscalar)
-         p.addParameter('Epoch', 10, @isnumscalar)
-         p.addParameter('Ksize',  2, @isnumscalar)
-         p.addParameter('Kovrl', .5, @isnumscalar)
-         p.addParameter('HzMin',  0, @isnumscalar)
-         p.addParameter('HzMax', 30, @isnumscalar)
-         p.addParameter('Delta', [ 0.5   4.0], @isnumvector)
-         p.addParameter('Theta', [ 4.5,  7.5], @isnumvector)
-         p.addParameter('Alpha', [ 8.0, 15.0], @isnumvector)
-         p.addParameter('Beta',  [15.5, 30.0], @isnumvector)
-         p.addParameter('wType', 'hann')
-         p.parse(eeg, SRate, varargin{:})
-         
+         p.addRequired( 'EEG', @isnumvector)
+         for i=1:length(args)
+            p.addParameter(args{i,1}, args{i,2}, args{i,3})
+         end
+         p.parse(eeg, varargin{:})
+
+         % grab default parameters
+         y = readparams('eepower.yml', 'eepower');
+         % if an optional params YAML file was given...
+         if ~isempty(p.Results.PFile)
+            % read the corresponding YAML file
+            ty = readparams([p.Results.PFile '.yml'], 'eepower');
+            % merge those parameters with the defaults
+            for f = fieldnames(ty)'
+               y.(f) = ty.(f);
+            end
+         end
+
+         % transfer parameters to the object
          obj.EEG   = p.Results.EEG;
-         obj.SRate = p.Results.SRate;
-         obj.Epoch = p.Results.Epoch;
-         obj.Ksize = p.Results.Ksize;
-         obj.Kovrl = p.Results.Kovrl;
-         obj.HzMin = p.Results.HzMin;
-         obj.HzMax = p.Results.HzMax;
-         obj.wType = p.Results.wType;
-         obj.Delta = p.Results.Delta;
-         obj.Theta = p.Results.Theta;
-         obj.Alpha = p.Results.Alpha;
-         obj.Beta  = p.Results.Beta;
-         
-         lprops = { 'Epoch' 'Ksize' 'HzMin' 'HzMax' 'wType'};
-         obj.addlistener(lprops, 'PostSet', @obj.HandleProps);
+         % exclude PFile from argument list
+         for i=2:length(args)
+            a = args{i,1}; % the field
+            % has this parametere been passed as an input argument?
+            passed = ~isequal(p.Results.(a), args{i,2});
+            % if so, then override the default
+            obj.(a)=cas(passed, p.Results.(a), getfieldi(y,a));
+         end
+         obj.addlistener(args(2:end,1), 'PostSet', @obj.HandleProps);
          obj.update_parameters
       end
       %------------------------------------------------ Return raw spectra
@@ -185,7 +219,7 @@ classdef EEpower < handle
          % reshape signal so that each column contains an epoch
          data = reshape(obj.EEG(1:obj.samples), obj.spe, obj.NumEpochs);
          % compute the power density estimates
-         obj.pxx = pwelch(data, obj.win, obj.spk*obj.Kovrl, obj.spk, obj.SRate);
+         obj.pxx = pwelch(data, obj.win, obj.spk*obj.Kover, obj.spk, obj.SRate);
          % compute max and min pwr for the frequency region of interest
          t = obj.pxx(obj.hz_rng, :);
          obj.MaxPwr = max(t(:));
@@ -199,11 +233,18 @@ classdef EEpower < handle
          obj.spk       = obj.Ksize * obj.SRate;
          % the kernel window
          p = str2func(validatewindow(obj.wType));
-         obj.win       = p(obj.spk);
-         % the number of samples in a single epoch
-         obj.spe       = obj.Epoch * obj.SRate;
-         % the number of available epochs in the data file
-         obj.NumEpochs = floor(length(obj.EEG)/obj.spe);
+         obj.win = p(obj.spk);
+         % setting the number of samples per epoch and
+         % the number of available epochs in the data
+         if obj.Epoch==0
+            % then the entire EEG is the epoch
+            obj.spe = length(obj.EEG);
+            obj.NumEpochs = 1;
+         else
+            % epoch duration times Hz
+            obj.spe = obj.Epoch * obj.SRate;
+            obj.NumEpochs = floor(length(obj.EEG)/obj.spe);
+         end
          % the number of total samples after flooring
          obj.samples   = obj.NumEpochs * obj.spe;
          % frequency range; resolution is the inverse of kernel size;
@@ -228,3 +269,67 @@ function vs = validatewindow(type)
    vs = validatestring(type, validwins);
 end
 
+% function value = getfieldi(S,field, default)
+%    names   = fieldnames(S);
+%    isField = strcmpi(field,names);
+   
+%    if any(isField)
+%       value = S.(names{isField});
+%    else
+%       value = default;
+%    end
+% end
+
+%          if nargin==2 % just EEG and params file
+%             pf = varargin{1};
+%             varargin={};
+%          else % in any other case
+%             % will try to ready the default params file
+%             pf = 'params.yml';
+%          end
+%
+%          % does a parameters file exist?
+%          s = which(pf);
+%          if isempty(s)
+%             warning('Parameter file not found, using defaults')
+%             y = struct;
+%          else
+%             disp(['Using parameter file: ' s])
+%             y = readparams(pf, 'eepower');
+%          end
+
+% p.addParameter('SRate', NaN, @isnumscalar)
+% p.addParameter('Epoch', NaN, @isnumscalar)
+% p.addParameter('Ksize', NaN, @isnumscalar)
+% p.addParameter('Kover', NaN, @isnumscalar)
+% p.addParameter('HzMin', NaN, @isnumscalar)
+% p.addParameter('HzMax', NaN, @isnumscalar)
+% p.addParameter('Delta', NaN, @isnumvector)
+% p.addParameter('Theta', NaN, @isnumvector)
+% p.addParameter('Alpha', NaN, @isnumvector)
+% p.addParameter('Beta',  NaN, @isnumvector)
+% p.addParameter('wType', NaN, @ishstring)
+% p.addParameter('PFile', NaN, @ishstring)
+
+% v = getfieldi(y, 'srate', 400);
+% v = getfieldi(y, 'epoch', 10);
+% v = getfieldi(y, 'ksize', 2);
+% v = getfieldi(y, 'kover', .5);
+% v = getfieldi(y, 'hzmin', 0);
+% v = getfieldi(y, 'hzmax', 30);
+% v = getfieldi(y, 'delta', [0.5, 4.0]);
+% v = getfieldi(y, 'theta', [4.5, 7.5]);
+% v = getfieldi(y, 'alpha', [8.0, 15.0]);
+% v = getfieldi(y, 'beta', [15.5, 30.0]);
+% v = getfieldi(y, 'wtype', 'hann');
+
+% obj.Epoch = p.Results.Epoch;
+% obj.Ksize = p.Results.Ksize;
+% obj.Kover = p.Results.Kover;
+% obj.HzMin = p.Results.HzMin;
+% obj.HzMax = p.Results.HzMax;
+% obj.wType = p.Results.wType;
+% obj.Delta = p.Results.Delta;
+% obj.Theta = p.Results.Theta;
+% obj.Alpha = p.Results.Alpha;
+% obj.Beta  = p.Results.Beta;

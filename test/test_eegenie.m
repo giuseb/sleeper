@@ -1,10 +1,17 @@
 % testing the EEGenie class using script-based unit tests
 % see Matlab documentation for more on how to write and execute tests
 
-% the default test hypnogram
-load test/test_hypnogram.mat
-ha = EEGenie('hyp', hypnogram);
-def_states = {'REM' 'NREM' 'Wake'};
+% sample hypnogram and markers
+t = load('test/test_hypnogram.mat');
+hyp = t.hypnogram;
+mrk = t.markers;
+% sample signals
+t= load('test/test_sleeper.mat');
+eeg = t.eeg;
+emg = t.emg;
+
+% defaults
+def_states = {'REM' 'NREM' 'Wake'}';
 def_epoch  = 10;
 
 % the default test marker structure
@@ -28,34 +35,35 @@ st(5).start_pos  = 13400;
 st(5).finish_pos = 15985;
 st(5).tag = 'SWD';
 
-%% Test-01: make sure an object is created
-assert(isa(ha, 'EEGenie'))
+%% Test-01: make sure an object is created, with default values
+t = EEGenie;
+assert(isa(t, 'EEGenie'))
+assert(isequal(t.States, def_states))
+assert(t.Epoch == def_epoch)
 
-%% Test-02: the object contains default values
-assert(isequal(ha.States, def_states))
-assert(ha.Epoch == def_epoch)
-
-%% Test-03: different parameters can be defined at object creation
+%% Test-02: different parameters can be defined at object creation
 stt =  {'uno', 'due'};
 ep = 4;
-t = EEGenie('hyp', hypnogram, 'states', stt, 'epoch', ep);
+t = EEGenie('hyp', hyp, 'states', stt, 'epoch', ep);
 assert(isequal(t.States, stt));
 assert(t.Epoch == ep)
 
-%% Test-04: epoch, seconds, minutes
-e1 = sum(hypnogram==1);
-e2 = sum(hypnogram==2);
-e3 = sum(hypnogram==3);
+%% Test-03: epoch, seconds, minutes
+e1 = sum(hyp==1);
+e2 = sum(hyp==2);
+e3 = sum(hyp==3);
 
-assert(isequal(ha.epochs, [e1, e2, e3]'))
+t = EEGenie('hyp', hyp);
+assert(isequal(t.epochs, [e1, e2, e3]'))
+
 ep = [def_epoch*e1; def_epoch*e2; def_epoch*e3];
-assert(isequal(ha.seconds, ep))
-assert(isequal(ha.minutes, ep/60))
+assert(isequal(t.seconds, ep))
+assert(isequal(t.minutes, ep/60))
 
 %% Test-05: find transitions in a short, dummy hypnogram
-% hy = [1 1 2 3 3 2 3 1 1 2 1 3 1];
-% t = EEGenie(hy);
-% assert(isequal(t.transitions.Count, [1 0 1 2 2 1]'))
+hy = [1 1 2 3 3 2 3 1 1 2 1 3 1];
+t = EEGenie('hyp', hy);
+assert(isequal(t.transitions.Count, [2 1 2 1 2 1]'))
 
 %% Test-06: getting epoch counts by state and block
 hy = [1 2 3 1 2 3 1 1 1 1 1 1 2 3 2 3 2 3];
@@ -138,3 +146,17 @@ assert(isequal(mm, [1 1 0 1]))
 me.TOI = false;
 mm = me.events_per_epoch;
 assert(isequal(mm, [1 2 1 1]))
+
+%% Test-15: adding an EEG signal and markers
+me = EEGenie('EEG', eeg, 'mark', mrk);
+neg = me.EEG;
+assert(isequal(neg, eeg))
+mar = me.Markers;
+assert(isequal(mrk, mar))
+
+%% Test-16: computing event spectra
+me = EEGenie('EEG', eeg, 'mark', mrk);
+s = me.spectra;
+disp(s)
+
+

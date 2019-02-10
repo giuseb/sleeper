@@ -1,0 +1,10 @@
+hypno:
+  stages: [sws, rem, nrem]
+eegenie:
+  epoch: 10
+  hz_min: 1
+  hz_max: 30
+eepower:
+  epoch: 5
+  delta: [0.5, 1]
+    

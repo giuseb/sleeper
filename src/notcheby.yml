@@ -1,0 +1,13 @@
+nothceby:
+  SRate:     400
+  notch:
+    QFactor:   1
+    NotchHz:  50
+  bandpass:
+    Fstop1:    0.3 # nice parameter
+    Fpass1:    0.4
+    Fpass2:   99
+    Fstop2:  100
+    Astop1:   60
+    Apass:    10
+    Astop2:   60
