@@ -159,4 +159,7 @@ me = EEGenie('EEG', eeg, 'mark', mrk);
 s = me.spectra;
 disp(s)
 
-
+%% Test-17: computing event durations
+me = EEGenie('mark', mrk);
+t = [1134,1369,1214,998,219,477]/400;
+assert(isequal(me.event_durations, t))

@@ -203,7 +203,7 @@ classdef EEGenie < handle
       %------ AGGREGATE METHODS, returning one element per state
       
       function rv = epochs(obj)
-         % EG.EPOCHS, where HA is an EEGenie object, returns the number of
+         % EG.EPOCHS, where EG is an EEGenie object, returns the number of
          % epochs for each state scored in the hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
          for i=1:obj.nstates
@@ -212,19 +212,19 @@ classdef EEGenie < handle
       end
       
       function rv = minutes(obj)
-         % EG.MINUTES, where HA is an EEGenie object, returns the total
+         % EG.MINUTES, where EG is an EEGenie object, returns the total
          % duration in minutes for each state scored in the hypnogram
          rv = obj.seconds / 60;
       end
       
       function rv = seconds(obj)
-         % EG.SECONDS, where HA is an EEGenie object, returns the total
+         % EG.SECONDS, where EG is an EEGenie object, returns the total
          % duration in seconds for each state scored in the hypnogram
          rv = obj.epochs * obj.Epoch;
       end
       
       function rv = fractions(obj)
-         % EG.FRACTIONS, where HA is an EEGenie object, returns the
+         % EG.FRACTIONS, where EG is an EEGenie object, returns the
          % fraction of time spent in each state scored in the hypnogram
          s = sum(obj.epochs);
          r = repmat(s, obj.nstates, 1);
@@ -232,7 +232,7 @@ classdef EEGenie < handle
       end
       
       function rv = episodes(obj)
-         % EG.EPISODES, where HA is an EEGenie object, returns the number
+         % EG.EPISODES, where EG is an EEGenie object, returns the number
          % of scored episodes for each state in the hypnogram
          t = diff([0; obj.Hypno]);
          r = reshape(t, obj.Block, obj.nblocks);
@@ -243,7 +243,7 @@ classdef EEGenie < handle
       end
       
       function rv = durations(obj)
-         % EG.DURATIONS, where HA is an EEGenie object, collects state
+         % EG.DURATIONS, where EG is an EEGenie object, collects state
          % episode durations. It returns a cell matrix, one row for each
          % state, one column for each block of epochs. Each cell contains
          % an array of episode durations in seconds.
@@ -280,7 +280,7 @@ classdef EEGenie < handle
       end
       
       function rv = mean_durations(obj)
-         % EG.MEAN_DURATIONS, where HA is an EEGenie object, returns the
+         % EG.MEAN_DURATIONS, where EG is an EEGenie object, returns the
          % mean episode durations (in seconds) for each state scored in the
          % hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
@@ -293,7 +293,7 @@ classdef EEGenie < handle
       end
       
       function rv = std_durations(obj)
-         % EG.STD_DURATIONS, where HA is an EEGenie object, returns the
+         % EG.STD_DURATIONS, where EG is an EEGenie object, returns the
          % standard deviation of episode durations (in seconds) for each
          % state scored in the hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
@@ -306,7 +306,7 @@ classdef EEGenie < handle
       end
       
       function rv = transitions(obj)
-         % EG.TRANSITIONS, where HA is an EEGenie object, returns a table
+         % EG.TRANSITIONS, where EG is an EEGenie object, returns a table
          % containing counts of all transition types
          
          % find all possible state pairs
@@ -380,7 +380,7 @@ classdef EEGenie < handle
       end
       
       function rv = event_durations(obj)
-         dif = obj.Markers(obj.aidx).esv - obj.Markers(obj.aidx).ssv;
+         dif = obj.esv - obj.ssv;
          rv = dif / obj.SRate;
       end
  
