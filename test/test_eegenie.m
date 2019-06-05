@@ -131,8 +131,8 @@ me = EEGenie('mark', st);
 assert(isequal(me.Tags, {'Art' 'SWD'}))
 
 %% Test-12: getting total number of events by tag
-me = EEGenie('mark', st);
-assert(isequal(me.totals, [2 3]))
+% me = EEGenie('mark', st);
+% assert(isequal(me.totals, [2 3]))
 
 %% Test-13: replacing tags
 me = EEGenie('mark', st);
@@ -157,9 +157,27 @@ assert(isequal(mrk, mar))
 %% Test-16: computing event spectra
 me = EEGenie('EEG', eeg, 'mark', mrk);
 s = me.spectra;
-disp(s)
+disp('spectra computed')
 
-%% Test-17: computing event durations
+%% Test-17: computing event durations, mean, std
 me = EEGenie('mark', mrk);
 t = [1134,1369,1214,998,219,477]/400;
 assert(isequal(me.event_durations, t))
+assert(isequal(me.event_duration_mean, mean(t)))
+assert(isequal(me.event_duration_std, std(t)))
+
+%% Test-18: computing the binned frequency of events
+hz = 400;
+% rng(0, 'twister') % always the same random numbers
+maxlen = 5000000; % over 3 hrs at 400Hz
+r = maxlen*rand(1000,1); % random start_positions
+c = histcounts(r, 'binw', hz*3600); % compute distribution
+tm = struct('start_pos', num2cell(r), 'tag', {'SWD'}, 'finish_pos', num2cell(r+3*hz));
+
+me = EEGenie('mar', tm, 'sra', hz, 'bin', 1, 'toi', 'SWD');
+assert(isequal(me.total, c))
+
+me.Bin = 0;
+assert(isequal(me.total, sum(c)))
+
+

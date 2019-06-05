@@ -2,6 +2,7 @@ eegenie:
   srate: 400
   epoch:  10
   block:   0
+  bin:     0
   states: [REM, NREM, Wake]
   toi:     SWD
   ksize:   2

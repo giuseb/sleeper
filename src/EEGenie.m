@@ -42,6 +42,8 @@ classdef EEGenie < handle
       Alpha     % the Alpha band (default: [ 8.0, 15.0])
       Beta      % the Beta  band (default: [15.5, 30.0])
       Verbose
+      Bin       % time bin in hours: different from Block, which may
+                % eventually be abandoned, if we drop epochs altogether
    end
    
    properties (SetAccess = private)
@@ -51,6 +53,8 @@ classdef EEGenie < handle
    
    properties (Access = private)
       changes % all the transitions computed as diff
+      binsec  % size of bin in seconds
+      nbins   % the number of time bins in the recording
       nblocks % the number of blocks in the hypnogram
       nstates % the number of states in the hypnogram
       aidx    % the indices of events tagged with the TOI
@@ -58,6 +62,7 @@ classdef EEGenie < handle
       ntags
       NoHyp
       NoMrk
+      NoEEG
    end
    
    methods %-------------------------------------------------- CONSTRUCTOR
@@ -83,13 +88,14 @@ classdef EEGenie < handle
          % the list of all possible arguments, with a default "null" value
          % and a validation function handle
          args = {
-            'PFile',      '', @ishstring;
+            'PFile',      '', @ishstring; % do not move PFile from args{1}
             'EEG',        [], @isnumvector;
             'Hypno',      [], @isnumvector;
             'Markers',    [], @isstruct;
             'States',     {}, @iscellstr;
             'Epoch',      -1, @isnumscalar;
             'Block',      -1, @isnumscalar;
+            'Bin',         0, @isnumscalar;
             'TOI',        '', @ishstring;
             'SRate',      -1, @isnumscalar;
             'Ksize',      -1, @isnumscalar;
@@ -127,7 +133,7 @@ classdef EEGenie < handle
          % (excluding PFile!)
          for i=2:length(args)
             a = args{i,1}; % the field
-            % has this parametere been passed as an input argument?
+            % has this parameter been passed as an input argument?
             passed = ~isequal(p.Results.(a), args{i,2});
             % if so, then override the default
             obj.(a)=cas(passed, p.Results.(a), getfieldi(y,a));
@@ -337,17 +343,9 @@ classdef EEGenie < handle
    
    methods %-------------------------------------------------- MARKERS
       
-      function rv = totals(obj)
-         % TOTALS: returns the total number of events, one value per
-         % existing tag (sorted alphabetically)
-         for i=1:obj.ntags
-            rv(i) = obj.total(obj.Tags{i}); %#ok<AGROW>
-         end
-      end
-      
-      function rv = total(obj, tag)
-         % TOTAL(TAG): returns the total number of events for the given tag
-         rv = sum(obj.tagged(tag));
+      function rv = total(obj)
+         % TOTAL: returns the total number of events for the current TOI
+         rv = histcounts(obj.start_times, 'BinWidth', obj.binsec);
       end
       
       function rv = events_per_epoch(obj)
@@ -382,6 +380,14 @@ classdef EEGenie < handle
       function rv = event_durations(obj)
          dif = obj.esv - obj.ssv;
          rv = dif / obj.SRate;
+      end
+ 
+      function rv = event_duration_mean(obj)
+         rv = mean(obj.event_durations);
+      end
+ 
+      function rv = event_duration_std(obj)
+         rv = std(obj.event_durations);
       end
  
       function replacetag(obj, before, after)
@@ -446,9 +452,14 @@ classdef EEGenie < handle
          rv = ismember({obj.Markers.tag}, tag);
       end
       
+      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      %%%%%%%%%%%%%%%%%%% PARAMETER UPDATING %%%%%%%%%%%%%%%%%%%%%
+      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
       function update_parameters(obj)
          obj.nstates = length(obj.States);
          obj.spk     = obj.Ksize * obj.SRate;
+         
+         obj.NoEEG = isempty(obj.EEG);
          
          % checking Markers
          m = obj.Markers;
@@ -468,6 +479,15 @@ classdef EEGenie < handle
                obj.aidx = true(1, length(obj.Markers));
             else
                obj.aidx = obj.tagged(obj.TOI);
+            end
+            
+            % Set binsize in seconds
+            if obj.Bin
+               % Bin is given in hours, so multiply
+               obj.binsec = obj.Bin * 3600;
+            else
+               % Bin is zero, use the last marker time stamp as binsize
+               obj.binsec = max(obj.start_times);
             end
          end
 
@@ -501,18 +521,26 @@ classdef EEGenie < handle
             c = [diff(2.^(obj.Hypno-1)); 0];
             obj.changes = reshape(c, obj.Block, obj.nblocks);
          end
-      end
+      end % OF UPDATE_PARAMETERS
    end
 end
 
-%       
-%       function rv = mark_count(obj, tag)
-%          % samples per epoch
-%          spe = obj.hz * obj.epoch;
-%          % find all markers tagged with tag
-%          x = ismember({obj.Markers.tag}, tag);
-%          beg = [obj.Markers.start_pos];
-%          fin = [obj.Markers.finish_pos];
-%          em = floor(beg / spe) + 1;
-%          rv = 0;
-%       end
+% function rv = mark_count(obj, tag)
+%    % samples per epoch
+%    spe = obj.hz * obj.epoch;
+%    % find all markers tagged with tag
+%    x = ismember({obj.Markers.tag}, tag);
+%    beg = [obj.Markers.start_pos];
+%    fin = [obj.Markers.finish_pos];
+%    em = floor(beg / spe) + 1;
+%    rv = 0;
+% end
+
+% function rv = totals(obj)
+%    % TOTALS: returns the total number of events, one value per
+%    % existing tag (sorted alphabetically)
+%    for i=1:obj.ntags
+%       rv(i) = obj.total(obj.Tags{i}); %#ok<AGROW>
+%    end
+% end
+
