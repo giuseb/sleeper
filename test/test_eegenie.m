@@ -114,16 +114,16 @@ assert(isequaln(t.mean_durations, means));
 %% Test-09: getting all start and end times (assuming 400Hz)
 me = EEGenie('mark', st);
 me.TOI = false;
-ss = me.start_times;
+ss = me.ev_ini_times;
 assert(isequal([1234/400 4022/400 7182/400 9100/400 13400/400], ss));
-se = me.end_times;
+se = me.ev_fin_times;
 assert(isequal([1901/400 6234/400 8302/400 9900/400 15985/400], se));
 
 %% Test-10: getting times for SWD tags (assuming 400Hz)
 me = EEGenie('mark', st);
-ss = me.start_times;
+ss = me.ev_ini_times;
 assert(isequal([1234/400 4022/400 13400/400], ss));
-se = me.end_times;
+se = me.ev_fin_times;
 assert(isequal([1901/400 6234/400 15985/400], se));
 
 %% Test-11: getting included tags, alphabetically ordered
@@ -180,4 +180,13 @@ assert(isequal(me.total, c))
 me.Bin = 0;
 assert(isequal(me.total, sum(c)))
 
+%% Test-19: assigning state to events
+clear t
+t.start_pos = 12399;
+t.finish_pos = 12900;
+t.tag = 'SWD';
+t.prev = '';
+t.next = '';
 
+me = EEGenie('mark', [mrk t], 'hyp', hyp, 'srate', 400, 'minpad', 1);
+[st, warn] = me.event_states

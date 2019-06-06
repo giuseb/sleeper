@@ -41,13 +41,17 @@ classdef EEGenie < handle
       Theta     % the Theta band (default: [ 4.5,  7.5])
       Alpha     % the Alpha band (default: [ 8.0, 15.0])
       Beta      % the Beta  band (default: [15.5, 30.0])
+      MinPad    % the minimum time (in seconds) between the beginning of an
+                % event and the beginning of the corresponding epoch,
+                % before flagging the event as problematic
       Verbose
       Bin       % time bin in hours: different from Block, which may
                 % eventually be abandoned, if we drop epochs altogether
    end
    
    properties (SetAccess = private)
-      hyplen % number of epochs in the hypnogram
+      hyplen      % number of epochs in the hypnogram
+      nCurrEvents % number of events matching the TOI
       Tags
    end
    
@@ -106,6 +110,7 @@ classdef EEGenie < handle
             'Theta',      [], @isnumvector;
             'Alpha',      [], @isnumvector;
             'Beta',       [], @isnumvector;
+            'MinPad',      1, @isnumscalar;
             'wType',      '', @ishstring;
             'Verbose', false, @islogical;
             };
@@ -169,8 +174,8 @@ classdef EEGenie < handle
          % tagged with the TOI in the markers array
          
          % retrieve start and end stamps for the currently tagged markers
-         stimes = obj.ssv;
-         etimes = obj.esv;
+         stimes = obj.ev_ini_pos;
+         etimes = obj.ev_fin_pos;
          
          % number of TOI-tagged markers
          nm = length(stimes);
@@ -204,7 +209,7 @@ classdef EEGenie < handle
       end
    end
    
-   methods %-------------------------------------------------- HYPNOGRAM
+   methods %----------------------------------------------------> HYPNOGRAM
       
       %------ AGGREGATE METHODS, returning one element per state
       
@@ -345,12 +350,12 @@ classdef EEGenie < handle
       
       function rv = total(obj)
          % TOTAL: returns the total number of events for the current TOI
-         rv = histcounts(obj.start_times, 'BinWidth', obj.binsec);
+         rv = histcounts(obj.ev_ini_times, 'BinWidth', obj.binsec);
       end
       
       function rv = events_per_epoch(obj)
          % the list of start positions
-         sss = obj.ssv;
+         sss = obj.ev_ini_pos;
          % the number of samples per epoch
          spe = obj.Epoch * obj.SRate;
          % the binning ceiling
@@ -361,24 +366,35 @@ classdef EEGenie < handle
          rv = histcounts(sss, bin);
       end
       
-      function rv = start_stamps(obj)
-         rv = obj.ssv;
+      function [rv, warn] = event_states(obj)
+         rv = zeros(obj.nCurrEvents, 1);
+         warn = [];
+         if obj.NoHyp
+            warning('No hypnogram present, no action taken')
+            return
+         end
+         tm = obj.ev_ini_times;
+         for i = 1:obj.nCurrEvents
+            epo = floor(tm(i) / obj.Epoch) + 1;
+            off = tm(i) - (epo-1) * obj.Epoch;
+            rv(i) = obj.Hypno(epo);
+            if epo>1 && off < obj.MinPad && rv(i) ~= obj.Hypno(epo-1)
+               warn = [warn, i]; %#ok<AGROW>
+               warning('Double-check event #%d', i)
+            end
+         end
       end
       
-      function rv = end_stamps(obj)
-         rv = obj.esv;
+      function rv = ev_ini_times(obj)
+         rv = obj.ev_ini_pos / obj.SRate;
       end
       
-      function rv = start_times(obj)
-         rv = obj.ssv / obj.SRate;
-      end
-      
-      function rv = end_times(obj)
-         rv = obj.esv / obj.SRate;
+      function rv = ev_fin_times(obj)
+         rv = obj.ev_fin_pos / obj.SRate;
       end
       
       function rv = event_durations(obj)
-         dif = obj.esv - obj.ssv;
+         dif = obj.ev_fin_pos - obj.ev_ini_pos;
          rv = dif / obj.SRate;
       end
  
@@ -396,8 +412,8 @@ classdef EEGenie < handle
       end
       
       function set_rms(obj)
-         ss = obj.ssv(idx);
-         es = obj.esv(idx);
+         ss = obj.ev_ini_pos(idx);
+         es = obj.ev_fin_pos(idx);
          id = find(idx);
          
          for i=1:length(idx)
@@ -409,8 +425,8 @@ classdef EEGenie < handle
       function set_freq(obj, eeg, tag)
          if nargin>1, idx=obj.tagged(tag); else, idx=obj.all; end
          
-         ss = obj.ssv(idx);
-         es = obj.esv(idx);
+         ss = obj.ev_ini_pos(idx);
+         es = obj.ev_fin_pos(idx);
          id = find(idx);
          
          for i=1:length(idx)
@@ -428,15 +444,19 @@ classdef EEGenie < handle
       end
    end
    
+   
+   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%%%%%%%%%%%%%%%%%% PRIVATE METHODS%%%%%%%%%%%%%%%%%%%%%
+   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
    methods (Access = private)
-      % start stamp vector
-      function rv = ssv(obj)
+      % current TOI: list of initial stamps
+      function rv = ev_ini_pos(obj)
          % the special notation to extract field values from a structure
          rv = [obj.Markers(obj.aidx).start_pos];
       end
       
-      % end stamp vector
-      function rv = esv(obj)
+      % current TOI: list of final stamps
+      function rv = ev_fin_pos(obj)
          % the special notation to extract field values from a structure
          rv = [obj.Markers(obj.aidx).finish_pos];
       end
@@ -452,9 +472,7 @@ classdef EEGenie < handle
          rv = ismember({obj.Markers.tag}, tag);
       end
       
-      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-      %%%%%%%%%%%%%%%%%%% PARAMETER UPDATING %%%%%%%%%%%%%%%%%%%%%
-      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      %------------------------------------------------> PARAMETER UPDATING
       function update_parameters(obj)
          obj.nstates = length(obj.States);
          obj.spk     = obj.Ksize * obj.SRate;
@@ -481,13 +499,15 @@ classdef EEGenie < handle
                obj.aidx = obj.tagged(obj.TOI);
             end
             
+            obj.nCurrEvents = sum(obj.aidx);
+            
             % Set binsize in seconds
             if obj.Bin
                % Bin is given in hours, so multiply
                obj.binsec = obj.Bin * 3600;
             else
                % Bin is zero, use the last marker time stamp as binsize
-               obj.binsec = max(obj.start_times);
+               obj.binsec = max(obj.ev_ini_times);
             end
          end
 
@@ -542,5 +562,13 @@ end
 %    for i=1:obj.ntags
 %       rv(i) = obj.total(obj.Tags{i}); %#ok<AGROW>
 %    end
+% end
+
+% function rv = start_stamps(obj)
+%    rv = obj.ev_ini_pos;
+% end
+% 
+% function rv = end_stamps(obj)
+%    rv = obj.ev_fin_pos;
 % end
 
