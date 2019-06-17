@@ -114,10 +114,9 @@ function sleeper_OpeningFcn(hObject, ~, h, eeg, varargin)
    h = update_parameters(h);
 
    %-------------------------------------------------------- set up hypnogram
-   if isempty(r.Hypno)
-      h.score = nan(h.tot_epochs, 1);
-   else
-      h.score = r.Hypno;
+   h.score = nan(h.tot_epochs, 1);
+   if ~isempty(r.Hypno)
+      h.score(1:length(r.Hypno)) = r.Hypno;
    end
 
    %----------------------------------------------------- set up GUI controls
@@ -254,8 +253,8 @@ end
 function btnSave_Callback(hObject, ~, h) %#ok<DEFNU>
    t = h.txtHypnoFName.String;
    h.txtHypnoFName.String = 'Saving...';
-   hypnogram = h.score; %#ok<NASGU>
-   markers = h.markers; %#ok<NASGU>
+   hypnogram = h.score; 
+   markers = h.markers; 
    save(t, 'hypnogram', 'markers')
    h.txtHypnoFName.String = 'Saved.';
    hObject.BackgroundColor = 'green';
@@ -757,12 +756,15 @@ function set_event_thr_label(h, curr)
    s = sprintf('Event #%d of %d @ %f mV', curr, h.sldEvents.Max, h.event_thr);
    h.lblEventThr.String = s;
 end
+
 function rv = seg_range(h, seg)
    rv = ep1(h, seg):epN(h, seg);
 end
+
 function rv = ep1(h, seg)
    rv = (seg-1) * h.epochs_in_seg + 1;
 end
+
 function rv = epN(h, seg)
    rv = min(seg * h.epochs_in_seg, h.tot_epochs);
 end
