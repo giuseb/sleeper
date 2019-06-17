@@ -98,7 +98,6 @@ function sleeper_OpeningFcn(hObject, ~, h, eeg, varargin)
    h.default_event_tag = 'Tag';
    h.marking = false;
 
-
    %------------ compute here parameters that cannot be changed while scoring
 
    % size of epoch in nof samples
@@ -157,13 +156,24 @@ end
 function hypno_ButtonDownFcn(hObject, eventdata)
    % I do not know why the handles are not passed here!
    h = guidata(hObject);
-   set(h.currEpoch, 'string', ceil(x_btn_pos(eventdata)));
+   epo = ceil(x_btn_pos(eventdata));
+   if beyond_last(h, epo)
+      beep
+      return
+   end
+   set(h.currEpoch, 'string', epo);
    h = draw_epoch(h);
    guidata(hObject, h)
 end
 
 function spectra_ButtonDownFcn(hObject, eventdata, h) %#ok<DEFNU>
-   set(h.currEpoch, 'string', ceil(x_btn_pos(eventdata)-.5));
+   epo = ceil(x_btn_pos(eventdata)-.5);
+   if beyond_last(h, epo)
+      beep
+      return
+   end
+   
+   set(h.currEpoch, 'string', epo);
    h = draw_epoch(h);
    guidata(hObject, h)
 end
@@ -418,6 +428,13 @@ function h = next_epoch(h)
    %    if h.gui_state == h.k.NORMAL
    e = uivalue(h.currEpoch) + 1;
    s = uivalue(h.currSeg);
+   
+   % do NOT go to the next epoch, if we already are on the very last one
+   if beyond_last(h, e)
+      beep
+      return
+   end
+   
    if e > h.epochs_in_seg && s < h.num_segments
       h.currEpoch.String = 1;
       h.currSeg.String = s+1;
@@ -461,17 +478,11 @@ function draw_spectra(h)
 end
 %------------------------------------------------------> Draw epoch charts
 function h = draw_epoch(h)
-   %    h.gui_state = h.k.NORMAL;
-   %    highlight_eeg(h, 'normal')
-
    seg = uivalue(h.currSeg);
    epo = uivalue(h.currEpoch);
-
-   if h.tot_epochs >= ep1(h, seg) + epo
-      h = draw_eeg(h, seg, epo);
-      draw_hypno(h, seg, epo);
-      draw_power(h, seg, epo);
-   end
+   h = draw_eeg(h, seg, epo);
+   draw_hypno(h, seg, epo);
+   draw_power(h, seg, epo);
 end
 %-------------------------------------------------------- Draw EEG and EMG
 function h = draw_eeg(h, seg, epo)
@@ -759,6 +770,11 @@ end
 
 function rv = seg_range(h, seg)
    rv = ep1(h, seg):epN(h, seg);
+end
+
+function rv = beyond_last(h, epo)
+   seg = uivalue(h.currSeg);
+   rv = (seg-1) * h.epochs_in_seg + epo > h.tot_epochs;
 end
 
 function rv = ep1(h, seg)
