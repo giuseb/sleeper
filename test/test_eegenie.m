@@ -54,16 +54,15 @@ e2 = sum(hyp==2);
 e3 = sum(hyp==3);
 
 t = EEGenie('hyp', hyp);
-assert(isequal(t.epochs, [e1, e2, e3]'))
+assert(isequal(t.state_epoch_counts, [e1, e2, e3]'))
 
 ep = [def_epoch*e1; def_epoch*e2; def_epoch*e3];
-assert(isequal(t.seconds, ep))
-assert(isequal(t.minutes, ep/60))
+assert(isequal(t.state_total_durations, ep))
 
 %% Test-05: find transitions in a short, dummy hypnogram
 hy = [1 1 2 3 3 2 3 1 1 2 1 3 1];
 t = EEGenie('hyp', hy);
-assert(isequal(t.transitions.Count, [2 1 2 1 2 1]'))
+assert(isequal(t.state_transitions.Count, [2 1 2 1 2 1]'))
 
 %% Test-06: getting epoch counts by state and block
 hy = [1 2 3 1 2 3 1 1 1 1 1 1 2 3 2 3 2 3];
@@ -74,7 +73,7 @@ out = [
    1 1 0 0 2 1
    1 1 0 0 1 2
 ];
-assert(isequal(t.epochs, out))
+assert(isequal(t.state_epoch_counts, out))
 
 %% Test-07: fractions of time, by state and block
 hy = [1 1 1 1  1 1 2 2  1 2 3 4];
@@ -85,7 +84,7 @@ out = [
    0  0   .25
 ];
 t = EEGenie('hyp', hy, 'block', 4, 'states', {'a' 'b' 'c' 'd'});
-assert(isequal(t.fractions, out))
+assert(isequal(t.state_proportions, out))
 
 %% Test-08: getting the number of episodes and the durations
 hy = [1 1 1 3 1   2 1 2 2 1   1 3 3 2 2   2 3 3 3 2];
@@ -95,21 +94,21 @@ out = [
    1 0 1 1
 ];
 t = EEGenie('hyp', hy, 'block', 5);
-assert(isequal(t.episodes, out));
+assert(isequal(t.state_episode_counts, out));
 
 dur = {
    [30;10], [10;20], [], []
         [], [10;20], 30, 10
         10,      [], 20, 30
 };
-assert(isequal(t.durations, dur));
+assert(isequal(t.state_episode_durations, dur));
 
 means = [
    20  15 NaN NaN
   NaN  15  30  10
    10 NaN  20  30
 ];
-assert(isequaln(t.mean_durations, means));
+assert(isequaln(t.state_episode_duration_mean, means));
 
 %% Test-09: getting all start and end times (assuming 400Hz)
 me = EEGenie('mark', st);
@@ -175,10 +174,10 @@ c = histcounts(r, 'binw', hz*3600); % compute distribution
 tm = struct('start_pos', num2cell(r), 'tag', {'SWD'}, 'finish_pos', num2cell(r+3*hz));
 
 me = EEGenie('mar', tm, 'sra', hz, 'bin', 1, 'toi', 'SWD');
-assert(isequal(me.total, c))
+assert(isequal(me.event_total_count, c))
 
 me.Bin = 0;
-assert(isequal(me.total, sum(c)))
+assert(isequal(me.event_total_count, sum(c)))
 
 %% Test-19: assigning state to events
 clear t
@@ -188,5 +187,11 @@ t.tag = 'SWD';
 t.prev = '';
 t.next = '';
 
+hy
+
+
+
 me = EEGenie('mark', [mrk t], 'hyp', hyp, 'srate', 400, 'minpad', 1);
 [st, warn] = me.event_states
+
+

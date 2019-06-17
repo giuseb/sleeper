@@ -7,6 +7,8 @@ classdef EEGenie < handle
    %   Objects of the EEGenie class operate on one or more of the following:
    %   * an EEG signal: an array of floats representing the potentials at
    %   the original sampling rate
+   %   * an EMG signal: an array of floats representing the potentials at
+   %   the original sampling rate
    %   * a hypnogram: an array of integers representing sequences of epochs
    %   (usually a few seconds each) labeled depending on the vigilance
    %   state scored during that period
@@ -25,6 +27,7 @@ classdef EEGenie < handle
 
    properties (SetObservable)
       EEG
+      EMG
       Hypno     % hypnogram
       States    % scoring states
       Epoch     % scoring epoch in seconds
@@ -67,6 +70,7 @@ classdef EEGenie < handle
       NoHyp
       NoMrk
       NoEEG
+      NoEMG
    end
    
    methods %-------------------------------------------------- CONSTRUCTOR
@@ -87,13 +91,14 @@ classdef EEGenie < handle
          % the file eegenie.yml, in the src directory. To change any values
          % upon construction, a custom YAML file can be passed (via the
          % PFile argument), but individual name-value pairs have
-         % precedence, when given.
+         % precedence, when provided.
          
          % the list of all possible arguments, with a default "null" value
          % and a validation function handle
          args = {
             'PFile',      '', @ishstring; % do not move PFile from args{1}
             'EEG',        [], @isnumvector;
+            'EMG',        [], @isnumvector;
             'Hypno',      [], @isnumvector;
             'Markers',    [], @isstruct;
             'States',     {}, @iscellstr;
@@ -155,7 +160,7 @@ classdef EEGenie < handle
    
    methods %-------------------------------------------------- EEG
       function notcheby(obj, fn)
-         % EG.NOTCHEBY  applies a notch a and bandpass chebyshev2 filter to
+         % EG.NOTCHEBY applies a notch and a bandpass chebyshev2 filter to
          % the EEG vector
          if isempty(obj.EEG)
             disp('No EEG to filter')
@@ -170,8 +175,9 @@ classdef EEGenie < handle
       end
       
       function rv = spectra(obj)
-         % EG.SPECTRA computes power spectra over each of the events
-         % tagged with the TOI in the markers array
+         % EG.SPECTRA, where EG is an EEGenie object, computes power
+         % spectra over each of the events tagged with the TOI in the
+         % markers array
          
          % retrieve start and end stamps for the currently tagged markers
          stimes = obj.ev_ini_pos;
@@ -210,41 +216,40 @@ classdef EEGenie < handle
    end
    
    methods %----------------------------------------------------> HYPNOGRAM
-      
-      %------ AGGREGATE METHODS, returning one element per state
-      
-      function rv = epochs(obj)
-         % EG.EPOCHS, where EG is an EEGenie object, returns the number of
-         % epochs for each state scored in the hypnogram
+            
+      function rv = state_epoch_counts(obj)
+         % EG.STATE_EPOCH_COUNTS, where EG is an EEGenie object, returns
+         % the number of epochs for each state scored in the hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
          for i=1:obj.nstates
             rv(i, :) = sum(obj.blocked==i);
          end
       end
       
-      function rv = minutes(obj)
-         % EG.MINUTES, where EG is an EEGenie object, returns the total
-         % duration in minutes for each state scored in the hypnogram
-         rv = obj.seconds / 60;
+      %       function rv = state_minutes(obj)
+      %          % EG.MINUTES, where EG is an EEGenie object, returns the total
+      %          % duration in minutes for each state scored in the hypnogram
+      %          rv = obj.state_seconds / 60;
+      %       end
+      
+      function rv = state_total_durations(obj)
+         % EG.STATE_TOTAL_DURATIONS, where EG is an EEGenie object, returns
+         % the total duration in seconds for each state scored in the
+         % hypnogram
+         rv = obj.state_epoch_counts * obj.Epoch;
       end
       
-      function rv = seconds(obj)
-         % EG.SECONDS, where EG is an EEGenie object, returns the total
-         % duration in seconds for each state scored in the hypnogram
-         rv = obj.epochs * obj.Epoch;
-      end
-      
-      function rv = fractions(obj)
-         % EG.FRACTIONS, where EG is an EEGenie object, returns the
+      function rv = state_proportions(obj)
+         % EG.STATE_PROPORTIONS, where EG is an EEGenie object, returns the
          % fraction of time spent in each state scored in the hypnogram
-         s = sum(obj.epochs);
+         s = sum(obj.state_epoch_counts);
          r = repmat(s, obj.nstates, 1);
-         rv = obj.epochs ./ r;
+         rv = obj.state_epoch_counts ./ r;
       end
       
-      function rv = episodes(obj)
-         % EG.EPISODES, where EG is an EEGenie object, returns the number
-         % of scored episodes for each state in the hypnogram
+      function rv = state_episode_counts(obj)
+         % EG.STATE_EPISODE_COUNTS, where EG is an EEGenie object, returns
+         % the number of scored episodes for each state in the hypnogram
          t = diff([0; obj.Hypno]);
          r = reshape(t, obj.Block, obj.nblocks);
          rv = zeros(obj.nstates, obj.nblocks);
@@ -253,11 +258,11 @@ classdef EEGenie < handle
          end
       end
       
-      function rv = durations(obj)
-         % EG.DURATIONS, where EG is an EEGenie object, collects state
-         % episode durations. It returns a cell matrix, one row for each
-         % state, one column for each block of epochs. Each cell contains
-         % an array of episode durations in seconds.
+      function rv = state_episode_durations(obj)
+         % EG.STATE_EPISODE_DURATIONS, where EG is an EEGenie object,
+         % collects state episode durations. It returns a cell matrix, one
+         % row for each state, one column for each block of epochs. Each
+         % cell contains an array of episode durations in seconds.
          
          % set up the cell array to be returned
          rv = cell(obj.nstates, obj.nblocks);
@@ -290,12 +295,12 @@ classdef EEGenie < handle
          rv{c_stg, c_blo} = [rv{c_stg, c_blo}; c_len * obj.Epoch];
       end
       
-      function rv = mean_durations(obj)
-         % EG.MEAN_DURATIONS, where EG is an EEGenie object, returns the
-         % mean episode durations (in seconds) for each state scored in the
-         % hypnogram
+      function rv = state_episode_duration_mean(obj)
+         % EG.STATE_EPISODE_DURATION_MEAN, where EG is an EEGenie object,
+         % returns the mean episode durations (in seconds) for each state
+         % scored in the hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
-         du = obj.durations;
+         du = obj.state_episode_durations;
          for i = 1:obj.nstates
             for j = 1:obj.nblocks
                rv(i, j) = mean(du{i,j});
@@ -303,12 +308,12 @@ classdef EEGenie < handle
          end
       end
       
-      function rv = std_durations(obj)
-         % EG.STD_DURATIONS, where EG is an EEGenie object, returns the
-         % standard deviation of episode durations (in seconds) for each
-         % state scored in the hypnogram
+      function rv = state_episode_duration_std(obj)
+         % EG.STATE_EPISODE_DURATION_STD, where EG is an EEGenie object,
+         % returns the standard deviation of episode durations (in seconds)
+         % for each state scored in the hypnogram
          rv = zeros(obj.nstates, obj.nblocks);
-         du = obj.durations;
+         du = obj.state_episode_durations;
          for i = 1:obj.nstates
             for j = 1:obj.nblocks
                rv(i,j) = std(du{i,j});
@@ -316,9 +321,9 @@ classdef EEGenie < handle
          end
       end
       
-      function rv = transitions(obj)
-         % EG.TRANSITIONS, where EG is an EEGenie object, returns a table
-         % containing counts of all transition types
+      function rv = state_transitions(obj)
+         % EG.STATE_TRANSITIONS, where EG is an EEGenie object, returns a
+         % table containing counts of all transition types
          
          % find all possible state pairs
          b = combnk(1:obj.nstates, 2);
@@ -346,15 +351,18 @@ classdef EEGenie < handle
       end
    end
    
-   methods %-------------------------------------------------- MARKERS
+   methods %-------------------------------------------------------> EVENTS
       
-      function rv = total(obj)
-         % TOTAL: returns the total number of events for the current TOI
-         rv = histcounts(obj.ev_ini_times, 'BinWidth', obj.binsec);
+      function rv = event_total_count(obj)
+         % EG.event_total_count, where EG is an EEGenie object, returns the
+         % total number of events for the current TOI
+         rv = histcounts(obj.event_ini_times, 'BinWidth', obj.binsec);
       end
       
       function rv = events_per_epoch(obj)
-         % the list of start positions
+         % EG.EVENTS_PER_EPOCH, where EG is an EEGenie object, returns the
+         % number of events for the current TOI that begin in each epoch
+         
          sss = obj.ev_ini_pos;
          % the number of samples per epoch
          spe = obj.Epoch * obj.SRate;
@@ -367,29 +375,31 @@ classdef EEGenie < handle
       end
       
       function [rv, warn] = event_states(obj)
+         % EG.event_states, where EG is an EEGenie object, returns the
+         % number of events for the current TOI that begin in each epoch
          rv = zeros(obj.nCurrEvents, 1);
          warn = [];
          if obj.NoHyp
             warning('No hypnogram present, no action taken')
             return
          end
-         tm = obj.ev_ini_times;
+         tm = obj.event_ini_times;
          for i = 1:obj.nCurrEvents
             epo = floor(tm(i) / obj.Epoch) + 1;
             off = tm(i) - (epo-1) * obj.Epoch;
             rv(i) = obj.Hypno(epo);
-            if epo>1 && off < obj.MinPad && rv(i) ~= obj.Hypno(epo-1)
+            if epo > 1 && off < obj.MinPad && rv(i) ~= obj.Hypno(epo-1)
                warn = [warn, i]; %#ok<AGROW>
                warning('Double-check event #%d', i)
             end
          end
       end
       
-      function rv = ev_ini_times(obj)
+      function rv = event_ini_times(obj)
          rv = obj.ev_ini_pos / obj.SRate;
       end
       
-      function rv = ev_fin_times(obj)
+      function rv = event_fin_times(obj)
          rv = obj.ev_fin_pos / obj.SRate;
       end
       
@@ -478,6 +488,7 @@ classdef EEGenie < handle
          obj.spk     = obj.Ksize * obj.SRate;
          
          obj.NoEEG = isempty(obj.EEG);
+         obj.NoEMG = isempty(obj.EMG);
          
          % checking Markers
          m = obj.Markers;
@@ -507,7 +518,7 @@ classdef EEGenie < handle
                obj.binsec = obj.Bin * 3600;
             else
                % Bin is zero, use the last marker time stamp as binsize
-               obj.binsec = max(obj.ev_ini_times);
+               obj.binsec = max(obj.event_ini_times);
             end
          end
 
