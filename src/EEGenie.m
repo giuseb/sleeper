@@ -159,18 +159,18 @@ classdef EEGenie < handle
    end
    
    methods %-------------------------------------------------- EEG
-      function notcheby(obj, fn)
-         % EG.NOTCHEBY applies a notch and a bandpass chebyshev2 filter to
-         % the EEG vector
+      function filter_eeg(obj, fn)
+         % EG.FILTER_EEG applies a Butterworth notch and a bandpass
+         % chebyshev2 filter to the EEG vector
          if isempty(obj.EEG)
             disp('No EEG to filter')
             return
          end
          
          if nargin==1
-            obj.EEG = notcheby(obj.EEG);
+            obj.EEG = notchband(obj.EEG);
          else
-            obj.EEG = notcheby(obj.EEG, fn);
+            obj.EEG = notchband(obj.EEG, fn);
          end
       end
       
