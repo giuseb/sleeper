@@ -15,5 +15,3 @@ eegenie:
   beta: [15.5, 30.0]
   wtype: hann
   minpad: 1
-
-

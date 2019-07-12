@@ -446,14 +446,13 @@ classdef EEGenie < handle
       end
    end
    
-   methods (Static)
+   methods (Static, Access=private)
       % triggers the update_parameters function whenever any of the
       % observable properties are modified by the user
       function HandleProps(~, event)
          event.AffectedObject.update_parameters
       end
    end
-   
    
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
    %%%%%%%%%%%%%%%%%%% PRIVATE METHODS%%%%%%%%%%%%%%%%%%%%%

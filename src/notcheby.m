@@ -5,27 +5,36 @@ function ne = notcheby(eeg, fn)
    % content of notcheby.yml into your own file, edit and use it instead:
    % EEG = NOTCHEBY(EEG, 'my_params.yml')
    
-   if nargin < 2
-      fn = 'notcheby.yml';
+   % first read the defaults
+   y = readparams('notcheby.yml', 'notcheby');
+   if nargin > 1
+      % if a different params file is passed, read it 
+      p2 = readparams(fn, 'notcheby');
+      % and override the default values
+      for f = fieldnames(p2)'
+         y.(f) = p2.(f);
+      end
    end
-   y = readparams(fn, 'notcheby');
    
-   disp('==================================')
-   disp('FILTERING PARAMETERS')
-   for j=1:length(x{1})
-      k = x{1}{j};
-      v = x{2}(j);
-      y.(k) = v;
-      disp([k ': ' num2str(v)])
-   end
-   disp('==================================')
-   
+   % these filters require the Signal Processing Toolbox
+   %   
    % notch filter design
-   Wo    = y.NotchHz/(y.SRate/2);
-   BW    = Wo/y.QFactor;
-   [b,a] = iirnotch(Wo,BW);
+   n = designfilt('bandstopiir', ...
+      'FilterOrder',y.NotchOrder, ...
+      'HalfPowerFrequency1',y.Notch1, ...
+      'HalfPowerFrequency2',y.Notch2, ...
+      'DesignMethod',y.NotchMethod, ...
+      'SampleRate',y.SRate);
+            
+   %
+   %    Wo    = y.NotchHz/(y.SRate/2);
+   %    BW    = Wo/y.NotchQ;
+   %    [b,a] = iirnotch(Wo,BW);
    
    % CHEBY2 filter design
+   c = designfilt('bandpassiir', ...
+      'FilterOrder', y.BandOrder, ...
+      '
    h  = fdesign.bandpass(y.Fstop1, ...
                          y.Fpass1, ...
                          y.Fpass2, ...

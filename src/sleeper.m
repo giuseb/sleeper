@@ -633,6 +633,7 @@ function h = toggle_zoom(h)
    switch h.gui_state
       case { h.k.ZOOM, h.k.ZOOMING, h.k.ZOOMED }
          h.gui_state = h.k.NORMAL;
+         highlight_eeg(h, 'normal')
          h = draw_epoch(h);
       case h.k.NORMAL
          h.gui_state = h.k.ZOOM;

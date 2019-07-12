@@ -1,13 +1,11 @@
-nothceby:
-  SRate:     400
-  notch:
-    QFactor:   1
-    NotchHz:  50
-  bandpass:
-    Fstop1:    0.3 # nice parameter
-    Fpass1:    0.4
-    Fpass2:   99
-    Fstop2:  100
-    Astop1:   60
-    Apass:    10
-    Astop2:   60
+notcheby:
+  SRate:      400
+  NotchOrder:   2
+  Notch1:      49
+  Notch2:      51
+  BandStop1:    0.3
+  BandPass1:    0.4
+  BandPass2:   99
+  BandStop2:  100
+  BandAtten1:  60
+  BandAtten2:  60

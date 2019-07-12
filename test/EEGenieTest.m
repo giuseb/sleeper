@@ -170,13 +170,6 @@ classdef EEGenieTest < matlab.unittest.TestCase
          TC.verifyEqual(t.Markers, TC.mrk)         
       end
       
-      function testSpectralComputation(TC)
-         % Computing event spectra
-         t = EEGenie('EEG', TC.eeg, 'mark', TC.mrk);
-         t.spectra;
-         disp('spectra computed')
-      end
-      
       function testEventDescription(TC)
          t = EEGenie('mark', TC.mrk);
          tm = [1134,1369,1214,998,219,477]/400;
@@ -197,6 +190,10 @@ classdef EEGenieTest < matlab.unittest.TestCase
          TC.verifyEqual(t.event_total_count, sum(c))
       end
       
+      function testStateToEventDT(TC)
+         
+      end
+      
       function testAssignStateToEvents(TC)
          m = TC.mrk;
          m(end+1).start_pos = 12399;
@@ -205,10 +202,22 @@ classdef EEGenieTest < matlab.unittest.TestCase
          m(end).prev = '';
          m(end).next = '';
          t = EEGenie('mark', m, 'hyp', TC.hyp, 'SRate', 400, 'minpad', 1);
-         disp('A warning is expected here!')
+         fprintf('\nA warning is expected here!\n')
          [st, warn] = t.event_states;
          TC.verifyEqual(st, [3 2 3 3 2 3 1]');
          TC.verifyEqual(warn, 7);
+      end
+      
+      function testSpectralComputation(TC)
+         % Computing event spectra
+         t = EEGenie('EEG', TC.eeg, 'mark', TC.mrk);
+         t.spectra;
+         fprintf('\nspectra computed, no assertions\n')
+      end
+      
+      function testNotcheby(TC)
+         t = EEGenie('EEG', TC.eeg);
+         t.notcheby
       end
    end
 end
