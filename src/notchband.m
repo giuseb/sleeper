@@ -7,10 +7,10 @@ function rv = notchband(eeg, fn)
    % EEG = NOTCHBAND(EEG, 'my_params.yml')
    
    % first read the defaults
-   y = readparams('notcheby.yml', 'notcheby');
+   y = readparams('notcheband.yml', 'notcheband');
    if nargin > 1
       % if a different params file is passed, read it
-      p2 = readparams(fn, 'notcheby');
+      p2 = readparams(fn, 'notcheband');
       % and override the default values
       for f = fieldnames(p2)'
          y.(f) = p2.(f);
