@@ -1,2 +1,3 @@
 *.m~
 tmpdata
+.DS_Store

@@ -13,5 +13,6 @@ eegenie:
   theta: [4.5,  7.5]
   alpha: [8.0, 15.0]
   beta: [15.5, 30.0]
+  sigma: [8.0, 16]
   wtype: hann
   minpad: 1

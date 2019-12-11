@@ -46,15 +46,6 @@ classdef EEpower < handle
    % Last modified: 17 Sep 2017
    
    %----------------------------------------------------------- Properties
-   properties (SetAccess = private)
-      EEG       % the actual EEG signal
-      NumEpochs % the number of epochs in the data file
-      MaxPwr    % maximum power computed over the entire signal
-      MinPwr    % minimum power computed over the entire signal
-      MaxLogPwr % maximum log power computed over the entire signal
-      MinLogPwr % minimum log power computed over the entire signal
-      HzRange   % the frequencies of interest
-   end
    properties (SetObservable)
       SRate     % signal sampling rate
       Epoch     % scoring epoch in seconds  (default: 10)      
@@ -68,6 +59,17 @@ classdef EEpower < handle
       Alpha     % the Alpha band (default: [ 8.0, 15.0])
       Beta      % the Beta  band (default: [15.5, 30.0])
    end
+   
+   properties (SetAccess = private)
+      EEG       % the actual EEG signal
+      NumEpochs % the number of epochs in the data file
+      MaxPwr    % maximum power computed over the entire signal
+      MinPwr    % minimum power computed over the entire signal
+      MaxLogPwr % maximum log power computed over the entire signal
+      MinLogPwr % minimum log power computed over the entire signal
+      HzRange   % the frequencies of interest
+   end
+   
    properties (Access = private)
       spe     % the number of samples in a single epoch
       spk     % the number of samples in a single kernel
@@ -79,9 +81,9 @@ classdef EEpower < handle
       win     % the kernel window
    end
    
-   %------------------------------------------------------- Public Methods
-   methods
-      %------------------------------------------------------- Constructor
+   %-------------------------------------------------------> Public Methods
+   methods (Access=public)
+      %-------------------------------------------------------> Constructor
       function obj = EEpower(eeg, varargin)
          % type >> help EEpower for help on how to use the EEpower class
          % constructor
@@ -97,7 +99,7 @@ classdef EEpower < handle
          % and a validation function handle
          args = {
             'PFile',  '', @ishstring;
-            'SRate',  [], @isnumscalar;
+            'SRate',  -1, @isnumscalar;
             'Epoch',  -1, @isnumscalar;
             'Ksize',  -1, @isnumscalar;
             'Kover',  -1, @isnumscalar;
@@ -140,6 +142,7 @@ classdef EEpower < handle
             % if so, then override the default
             obj.(a)=cas(passed, p.Results.(a), getfieldi(y,a));
          end
+         % make object react if a parameter is set later on
          obj.addlistener(args(2:end,1), 'PostSet', @obj.HandleProps);
          obj.update_parameters
       end
@@ -183,10 +186,13 @@ classdef EEpower < handle
          if nargin < 2, epochs = 1:obj.NumEpochs; end
          rv = mean(obj.spectra(epochs), 2);
       end
-      %------------------------------------------- Mean band power density
-      function rv = mean_band_power(obj, band, epochs)
-         if nargin < 2, epochs = 1:obj.NumEpochs; end
-         rv = mean(obj.mean_power(epochs));
+      %------------------------------------------- Testing bandpower
+      % using Signal Processing Toolbox's bandpower function instead of
+      % pwelch; any problems with this?
+      function rv = bandpower(obj, band, epochs)
+         if nargin < 3 , epochs = 1:obj.NumEpochs; end
+         data = bandpower(obj.epochs_in_columns, obj.SRate, obj.(band));
+         rv = data(epochs);
       end
       %------------------------------------------------ Plot power density
       function rv = power_density_curve(obj, epochs)
@@ -204,7 +210,7 @@ classdef EEpower < handle
       end
    end
    
-   methods (Static)
+   methods (Static, Access=private)
       % triggers the update_parameters function whenever any of the
       % observable properties are modified by the user
       function HandleProps(~, event)
@@ -216,14 +222,16 @@ classdef EEpower < handle
       %------------------------------------------------- Calculate spectra
       function computeWelch(obj)
          obj.dirty = false;
-         % reshape signal so that each column contains an epoch
-         data = reshape(obj.EEG(1:obj.samples), obj.spe, obj.NumEpochs);
-         % compute the power density estimates
-         obj.pxx = pwelch(data, obj.win, obj.spk*obj.Kover, obj.spk, obj.SRate);
+         % compute the power density estimates, for each epoch
+         obj.pxx = pwelch(obj.epochs_in_columns, obj.win, obj.spk*obj.Kover, obj.spk, obj.SRate);
          % compute max and min pwr for the frequency region of interest
          t = obj.pxx(obj.hz_rng, :);
          obj.MaxPwr = max(t(:));
          obj.MinPwr = min(t(:));
+      end
+      
+      function rv = epochs_in_columns(obj)
+          rv = reshape(obj.EEG(1:obj.samples), obj.spe, obj.NumEpochs);
       end
       
       function update_parameters(obj)

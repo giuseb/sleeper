@@ -43,6 +43,7 @@ classdef EEGenie < handle
       Delta     % the Delta band (default: [ 0.5   4.0])
       Theta     % the Theta band (default: [ 4.5,  7.5])
       Alpha     % the Alpha band (default: [ 8.0, 15.0])
+      Sigma     % the Sigma band (default: TBA)
       Beta      % the Beta  band (default: [15.5, 30.0])
       MinPad    % the minimum time (in seconds) between the beginning of an
                 % event and the beginning of the corresponding epoch,
@@ -50,6 +51,8 @@ classdef EEGenie < handle
       Verbose
       Bin       % time bin in hours: different from Block, which may
                 % eventually be abandoned, if we drop epochs altogether
+      Exclude   % tags to look for in order to remove the corresponding
+                % epochs from the spectral analysis
    end
    
    properties (SetAccess = private)
@@ -71,6 +74,7 @@ classdef EEGenie < handle
       NoMrk
       NoEEG
       NoEMG
+      excluded % epochs that contain one or more Exclusion tags
    end
    
    methods %-------------------------------------------------- CONSTRUCTOR
@@ -115,9 +119,11 @@ classdef EEGenie < handle
             'Theta',      [], @isnumvector;
             'Alpha',      [], @isnumvector;
             'Beta',       [], @isnumvector;
+            'Sigma',      [], @isnumvector;
             'MinPad',      1, @isnumscalar;
             'wType',      '', @ishstring;
             'Verbose', false, @islogical;
+            'Exclude', {'ART'}, @iscellstr;
             };
 
          % input argument parsing
@@ -159,6 +165,31 @@ classdef EEGenie < handle
    end
    
    methods %-------------------------------------------------- EEG
+      function rv = bandpower(obj, band)
+         % BANDPOWER(BAND): returns the average power for the given BAND,
+         % one value per epoch, for the entire EEG
+         ep = EEpower(obj.EEG, ...
+            'SRate', obj.SRate, ...
+            'Ksize', obj.Ksize, ...
+            'Kover', obj.Kover);
+         pow = ep.bandpower(band);
+         % total epochs
+         teps = length(pow);
+         % number of valid epochs (discarding trailing epochs)
+         nepochs = teps - rem(teps, obj.Block);
+         % "blocked" power: values by, eg, hour
+         bpow = reshape(pow(1:nepochs), obj.Block, obj.nblocks);
+         % negate "excluded" and reshape to mimic the above
+         tex = reshape(~obj.excluded, obj.Block, obj.nblocks);
+         for s=1:obj.nstates
+            for i=1:obj.nblocks
+               t1 = bpow(:,i);
+               t2 = t1(obj.blocked==s && tex(:,i));
+               rv(s,i) = mean(t2); %#ok<AGROW>
+            end
+         end
+      end
+      
       function filter_eeg(obj, fn)
          % EG.FILTER_EEG applies a Butterworth notch and a bandpass
          % chebyshev2 filter to the EEG vector
@@ -481,6 +512,11 @@ classdef EEGenie < handle
          rv = ismember({obj.Markers.tag}, tag);
       end
       
+      % find epoch number given an event's start_pos or finish_pos
+      function rv = epoch_of_event(obj, pos)
+         rv = pos / (obj.SRate * obj.Epoch);
+      end
+      
       %------------------------------------------------> PARAMETER UPDATING
       function update_parameters(obj)
          obj.nstates = length(obj.States);
@@ -519,7 +555,20 @@ classdef EEGenie < handle
                % Bin is zero, use the last marker time stamp as binsize
                obj.binsec = max(obj.event_ini_times);
             end
+            
+            % checking exclusions
+            excluded_epochs = [];
+            tidx = obj.tagged(obj.Exclude);
+            for i=obj.Markers(tidx)
+               start_epoch = obj.epoch_of_event(i.start_pos);
+               finish_epoch = obj.epoch_of_event(i.finish_pos);
+               excluded_epochs = [excluded_epochs, start_epoch:finish_epoch]; %#ok<AGROW>
+            end
+            t = false(1, obj.hyplen);
+            t(excluded_epochs) = true;
+            obj.excluded = t;
          end
+         
 
          % checking hypnogram
          if isempty(obj.Hypno)
