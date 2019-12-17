@@ -59,6 +59,7 @@ classdef EEGenie < handle
       hyplen      % number of epochs in the hypnogram
       nCurrEvents % number of events matching the TOI
       Tags
+      nEpochs     % number epochs in the EEG/EMG
    end
    
    properties (Access = private)
@@ -72,8 +73,6 @@ classdef EEGenie < handle
       ntags
       NoHyp
       NoMrk
-      NoEEG
-      NoEMG
       excluded % epochs that contain one or more Exclusion tags
    end
    
@@ -184,7 +183,7 @@ classdef EEGenie < handle
          for s=1:obj.nstates
             for i=1:obj.nblocks
                t1 = bpow(:,i);
-               t2 = t1(obj.blocked==s && tex(:,i));
+               t2 = t1(obj.blocked==s & tex(:,i));
                rv(s,i) = mean(t2); %#ok<AGROW>
             end
          end
@@ -507,14 +506,15 @@ classdef EEGenie < handle
          obj.ntags = length(obj.Tags);
       end
       
-      % finding events tagged with tag
+      % finding tagged events: argument tag is the event's string, the
+      % return value is a boolean array pointing to all matching markers.
       function rv = tagged(obj, tag)
          rv = ismember({obj.Markers.tag}, tag);
       end
       
       % find epoch number given an event's start_pos or finish_pos
       function rv = epoch_of_event(obj, pos)
-         rv = pos / (obj.SRate * obj.Epoch);
+         rv = floor(pos / (obj.SRate * obj.Epoch))+1;
       end
       
       %------------------------------------------------> PARAMETER UPDATING
@@ -522,8 +522,14 @@ classdef EEGenie < handle
          obj.nstates = length(obj.States);
          obj.spk     = obj.Ksize * obj.SRate;
          
-         obj.NoEEG = isempty(obj.EEG);
-         obj.NoEMG = isempty(obj.EMG);
+         %!obj.NoEEG = isempty(obj.EEG);
+         %!obj.NoEMG = isempty(obj.EMG);
+         
+         if ~isempty(obj.EEG)
+            obj.nEpochs = floor(length(obj.EEG) / (obj.SRate * obj.Epoch));
+         elseif ~isempty(obj.EMG)
+            obj.nEpochs = floor(length(obj.EMG) / (obj.SRate * obj.Epoch));
+         end
          
          % checking Markers
          m = obj.Markers;
@@ -557,16 +563,13 @@ classdef EEGenie < handle
             end
             
             % checking exclusions
-            excluded_epochs = [];
+            obj.excluded = false(1, obj.nEpochs);
             tidx = obj.tagged(obj.Exclude);
             for i=obj.Markers(tidx)
                start_epoch = obj.epoch_of_event(i.start_pos);
                finish_epoch = obj.epoch_of_event(i.finish_pos);
-               excluded_epochs = [excluded_epochs, start_epoch:finish_epoch]; %#ok<AGROW>
+               obj.excluded(start_epoch:finish_epoch) = true;
             end
-            t = false(1, obj.hyplen);
-            t(excluded_epochs) = true;
-            obj.excluded = t;
          end
          
 
@@ -581,7 +584,7 @@ classdef EEGenie < handle
                error('NaNs in hypnogram at positions: %d', find(nani))
             end
 
-            hl = length(obj.Hypno);
+            hl = obj.nEpochs;
             % trim the hypnogram if necessary, based on block size
             if obj.Block
                % blocking has been specified, determine the number of blocks
