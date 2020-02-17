@@ -1,6 +1,7 @@
 classdef EEGenie < handle
    %EEGenie: simple calculations on hypnograms and EEG events
    %
+   %   Analyzing vigilance states and "events", scored/detected on the
    %   basis of video-EEG-EMG recordings.
    %
    %   Objects of the EEGenie class operate on one or more of the following:
@@ -237,7 +238,9 @@ classdef EEGenie < handle
             ep = EEpower(eeg, 'SRate', obj.SRate, ...
                               'Ksize', obj.Ksize, ...
                               'Epoch', 0, ...
-                              'Kover', obj.Kover);
+                              'Kover', obj.Kover, ...
+                              'HzMin',obj.HzMin,...
+                              'HzMax',obj.HzMax);
             ee = ep.spectra;
             rv = [rv ee]; %#ok<AGROW>
          end
