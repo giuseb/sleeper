@@ -1,7 +1,6 @@
 classdef EEGenie < handle
    %EEGenie: simple calculations on hypnograms and EEG events
    %
-   %   Analyzing vigilance states and “events”, scored/detected on the
    %   basis of video-EEG-EMG recordings.
    %
    %   Objects of the EEGenie class operate on one or more of the following:
@@ -23,7 +22,7 @@ classdef EEGenie < handle
    %
    %   >> EG.EEG = eeg;
    %
-   %   Type “doc EEGenie” at the command line or click below for more help
+   %   Type "doc EEGenie" at the command line or click below for more help
 
    properties (SetObservable)
       EEG
@@ -79,7 +78,7 @@ classdef EEGenie < handle
    methods %-------------------------------------------------- CONSTRUCTOR
       function obj = EEGenie(varargin)
          %   Input data and other parameters can be provided at construction time
-         %   as name/value “argument pairs”, e.g.
+         %   as name/value "argument pairs", e.g.
          %
          %   >> hypnogram = [1 1 2 3 2 3 2 2 3 2 2 1 2]
          %   >> ee = EEGenie('hyp', hypnogram)
