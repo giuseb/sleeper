@@ -54,10 +54,13 @@ classdef EEpower < handle
       HzMin     % minimum plotted frequency (default: 0)
       HzMax     % maximum plotted frequency (default: 30)
       wType     % the window type (default: 'hanning')
-      Delta     % the Delta band (default: [ 0.5   4.0])
-      Theta     % the Theta band (default: [ 4.5,  7.5])
+      Delta     % the Delta band (default: [ 0.5   5.0])
+      Theta     % the Theta band (default: [ 6,  9.5])
       Alpha     % the Alpha band (default: [ 8.0, 15.0])
+      Sigma     % the Sigma band (default: [ 10.5, 15.0])
       Beta      % the Beta  band (default: [15.5, 30.0])
+      Gamma     % the Alpha band (default: [ 30.0, 60.0])
+      All       % the All band represent all frequencies (default: [ 0, 60])
    end
    
    properties (SetAccess = private)
@@ -109,6 +112,9 @@ classdef EEpower < handle
             'Theta',  [], @isnumvector;
             'Alpha',  [], @isnumvector;
             'Beta',   [], @isnumvector;
+            'Sigma',  [], @isnumvector;
+            'Gamma',  [], @isnumvector;
+            'All',    [], @isnumvector; 
             'wType',  '', @ishstring;
             };
          

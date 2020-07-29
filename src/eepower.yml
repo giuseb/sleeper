@@ -5,9 +5,13 @@ eepower:
   kover:   0.5
   hzmin:   0
   hzmax:  30
-  delta: [0.5,  4.0]
-  theta: [4.5,  7.5]
+  delta: [0.5, 5.0]
+  theta: [6, 9.5]
   alpha: [8.0, 15.0]
+  sigma: [10.5, 15.0] 
   beta: [15.5, 30.0]
+  gamma: [30, 60]
+  all: [0, 200]
+
   wtype: hann
 

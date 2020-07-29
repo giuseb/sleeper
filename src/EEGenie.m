@@ -40,11 +40,13 @@ classdef EEGenie < handle
       HzMin     % minimum plotted frequency (default: 0)
       HzMax     % maximum plotted frequency (default: 30)
       wType     % the window type (default: 'hanning')
-      Delta     % the Delta band (default: [ 0.5   4.0])
-      Theta     % the Theta band (default: [ 4.5,  7.5])
+      Delta     % the Delta band (default: [ 0.5   5.0])
+      Theta     % the Theta band (default: [ 6,  9.5])
       Alpha     % the Alpha band (default: [ 8.0, 15.0])
-      Sigma     % the Sigma band (default: TBA)
+      Sigma     % the Sigma band (default: [ 10.5, 15.0])
       Beta      % the Beta  band (default: [15.5, 30.0])
+      Gamma     % the Gamma band (default: [ 30.0, 60.0])
+      All       % the All band represent all frequencies (default: [ 0, 60])
       MinPad    % the minimum time (in seconds) between the beginning of an
                 % event and the beginning of the corresponding epoch,
                 % before flagging the event as problematic
@@ -53,14 +55,16 @@ classdef EEGenie < handle
                 % eventually be abandoned, if we drop epochs altogether
       Exclude   % tags to look for in order to remove the corresponding
                 % epochs from the spectral analysis
+      excluded  % epochs that contain one or more Exclusion tags
+      nEpochs   % number epochs in the EEG/EMG
+
    end
    
    properties (SetAccess = private)
       hyplen      % number of epochs in the hypnogram
       nCurrEvents % number of events matching the TOI
       Tags
-      nEpochs     % number epochs in the EEG/EMG
-   end
+    end
    
    properties (Access = private)
       changes % all the transitions computed as diff
@@ -73,7 +77,6 @@ classdef EEGenie < handle
       ntags
       NoHyp
       NoMrk
-      excluded % epochs that contain one or more Exclusion tags
    end
    
    methods %-------------------------------------------------- CONSTRUCTOR
@@ -119,6 +122,8 @@ classdef EEGenie < handle
             'Alpha',      [], @isnumvector;
             'Beta',       [], @isnumvector;
             'Sigma',      [], @isnumvector;
+            'Gamma',      [], @isnumvector;  
+            'All',        [], @isnumvector;  
             'MinPad',      1, @isnumscalar;
             'wType',      '', @ishstring;
             'Verbose', false, @islogical;
@@ -164,13 +169,396 @@ classdef EEGenie < handle
    end
    
    methods %-------------------------------------------------- EEG
-      function rv = bandpower(obj, band)
-         % BANDPOWER(BAND): returns the average power for the given BAND,
+    
+        %EG.SPECTRUM: returns the average power spectrum density for the 
+         %given Hz bin dependin on Hz Max and Hz Min, one value for eache
+         %Bin and for each state. If you specify 'normstate' power spectrum
+         %density wil be normalized on total spectrum of the corresponding
+         %vigilance status for the length of EEG rec. If you specify 
+         %'normtot'power spectrum density wil be normalized on total
+         %spectrum for the length of EEG rec. If you don't specify
+         %anything function returns raw power spectrum density for 
+         %the length of EEG rec. Specifying also 'bin' as second argument
+         %function returns the power spectrum density normalized on each 
+         %bin of interest. When you specified type of normalization
+         %you can also specify as third element 'all' in order to obtain 
+         %normalizaztion of power for each bin but in all recording.
+  
+     function spect= spectrum(varargin)
+             narginchk(1,4);
+             [varargin{:}] = convertStringsToChars(varargin{:});
+              matches_bin = find(strcmpi('bin',varargin));
+              matches_all = find(strcmpi('all',varargin));
+              matches_normstate= find(strcmpi('normstate',varargin));
+              matches_normtot= find(strcmpi('normtot',varargin));
+              
+              
+               if any(matches_normstate)&& isempty(matches_bin) && isempty(matches_all)
+              
+                 varargin(matches_normstate)=[];
+                 spect = spectrumstate(varargin{:});
+               
+               elseif any(matches_normtot)&& isempty(matches_bin)&& isempty(matches_all)
+                   
+                 varargin(matches_normtot)=[];
+                 spect = spectrumtot(varargin{:});
+                 
+                elseif any(matches_normstate)&& any(matches_bin)&& isempty(matches_all)
+                   varargin([matches_normstate matches_bin])=[];
+                   spect = spectrumstatebin(varargin{:});
+               
+               elseif any(matches_normtot)&& any(matches_bin)&& isempty(matches_all)
+                   varargin([matches_normtot matches_bin])=[];
+                   spect = spectrumtotbin(varargin{:});
+                
+               elseif any(matches_bin)&& isempty(matches_normtot)&& isempty(matches_normstate)&& isempty(matches_all) 
+                   varargin(matches_bin)=[];
+                   spect = spectrumrawbin(varargin{:});
+               
+               elseif any(matches_bin)&& any(matches_normstate)&&isempty(matches_normtot) && any(matches_all) 
+                   varargin([matches_normstate matches_bin matches_all])=[];
+                   spect=spectrumstatebinall(varargin{:});
+                   
+               elseif any(matches_bin)&& isempty(matches_normstate)&& any(matches_normtot) && any(matches_all) 
+                   varargin([matches_normtot matches_bin matches_all])=[];
+                   spect=spectrumtotbinall(varargin{:});    
+               
+                                                  
+               elseif isempty(matches_bin)&& isempty(matches_normtot)|| isempty(matches_normstate)&& isempty(matches_all)
+                   spect = spectrumraw(varargin{:});
+               end
+     end
+     
+     %EG.SPECTRUMTOTBINALL: returns the total spectrum power in each Hz-BIN for
+     %each time bin for each vigilance state normalized in the total power
+     %of each vigilance state throughout all recording
+     function rv=spectrumtotbinall(obj)
+           sp_bin= obj.spectrum('bin');
+           all_power= obj.allpower;  
+           for i=1:obj.nblocks
+            rv{i}=(sp_bin{i}/all_power)*100;
+            end
+         end
+     %EG.SPECTRUMSTATEBINALL: returns the total spectrum power in each Hz-BIN for
+     %each time bin for each vigilance state normalized in the total power
+     %of each vigilance state throughout all recording
+          function rv=spectrumstatebinall(obj)
+           sp_bin= obj.spectrum('bin');
+           all_power_state= obj.allpower('state');  
+           for i=1:obj.nblocks
+            rv{i}=(sp_bin{i}./all_power_state)*100;
+            end
+         end
+          
+     
+     %EG.SPECTRUMRAW:returns the total spectrum power in each Hz-BIN for
+     %all recording time for each vigilance state;
+          function rv = spectrumraw(obj)
+                 ep = EEpower(obj.EEG, ...
+            'SRate', obj.SRate, ...
+            'Ksize', obj.Ksize, ...
+            'Kover', obj.Kover,...
+            'HzMin', obj.HzMin,...
+            'HzMax', obj.HzMax);
+         sp = ep.spectra;
+         % total epochs
+         teps = length(sp);
+         % number of valid epochs (discarding trailing epochs)
+         nepochs = teps - rem(teps, obj.Block);
+        %state
+        states=obj.Hypno';
+
+         if isempty(obj.excluded)
+             for s=1:obj.nstates
+               sp=sp(:,1:nepochs);
+               sp1 = sp(:,states==s);
+               rv(s,:) = mean(sp1,2,'omitnan'); 
+             end
+         else
+          tex = ~obj.excluded;
+            for s=1:obj.nstates
+             sp=sp(:,1:nepochs);  
+             sp1 = sp(:,states==s & tex);
+             rv(s,:) = mean(sp1,2,'omitnan'); 
+            end
+         end
+        end
+       
+    %EG.SPECTRUMRAWBIN:returns the total spectrum power in each Hz-BIN
+    %for each time bin for each vigilance state;
+          function rv = spectrumrawbin(obj)
+                 ep = EEpower(obj.EEG, ...
+            'SRate', obj.SRate, ...
+            'Ksize', obj.Ksize, ...
+            'Kover', obj.Kover,...
+            'HzMin', obj.HzMin,...
+            'HzMax', obj.HzMax);
+         sp = ep.spectra;
+         % total epochs
+         teps = length(sp);
+         % number of valid epochs (discarding trailing epochs)
+         nepochs = teps - rem(teps, obj.Block);
+        %state
+        states=obj.Hypno';
+        sp=sp(:,1:nepochs);
+        split= size(sp, 2) / obj.nblocks*ones(1,obj.nblocks);
+        statesplit=mat2cell(states,1,size(states, 2) / obj.nblocks*ones(1,obj.nblocks));
+        spsplit = mat2cell(sp, size(sp,1), split);
+
+         if isempty(obj.excluded)
+             for i=1:obj.nblocks
+                for s=1:obj.nstates
+               sp1=spsplit{i}(:,statesplit{i}==s);
+               rv{i}(s,:) = mean(sp1,2,'omitnan')'; 
+                end
+             end
+         else
+          tex = ~obj.excluded;
+          texsplit=mat2cell(tex,1,size(tex, 2)/obj.nblocks*ones(1,obj.nblocks));
+           for i=1:obj.nblocks
+                for s=1:obj.nstates
+               sp1=spsplit{i}(:,statesplit{i}==s & texsplit{i});
+               rv{i}(s,:) = mean(sp1,2,'omitnan')'; 
+                end
+             end
+         end
+       end
+       
+     %EG.SPECTRUMSTATE:returns the spectrum power normalized for the power
+     %of corresponding vigilance state in all recordings
+          function rv = spectrumstate(obj) 
+        rv=(obj.spectrum()./obj.allpower('state'))*100;
+      end 
+       
+     %EG.SPECTRUMSTATEBIN:returns the spectrum power normalized for the
+     %power of corresponding vigilance state in each time bin
+         function rv = spectrumstatebin(obj) 
+            sp_bin= obj.spectrum('bin');
+            all_bin= obj.allpower('state','bin');
+            for i=1:obj.nblocks
+            rv{i}=(sp_bin{i}./all_bin(:,1))*100;
+            end
+         end
+      
+     %EG.SPECTRUMTOT:returns the spectrum power for each vigilance state 
+     %normalized for total power in all recording;
+         function rv = spectrumtot(obj) 
+        rv=(obj.spectrum()/obj.allpower())*100; 
+        end
+        
+     %EG.SPECTRUMTOTBIN:returns the spectrum power for each vigilance 
+     %state normalized for total power in each time bin; 
+         function rv = spectrumtotbin(obj) 
+            sp_bin= obj.spectrum('bin');
+            all_bin= obj.allpower('bin');
+            for i=1:obj.nblocks
+            rv{i}=(sp_bin{i}./all_bin(i))*100;
+            end
+         end
+      
+   %%%%%%%%%%%%%%%%%%% internal functions
+          
+    %EG.SPECTRUMTOTRAW:returns the total spectrum power in each Hz-BIN 
+    %for all recording time indipendently from vigilance state;
+     function rv = spectrumtotraw(obj)%total power per HZ in all EEG
+           ep = EEpower(obj.EEG, ...
+            'SRate', obj.SRate, ...
+            'Ksize', obj.Ksize, ...
+            'Kover', obj.Kover,...
+            'HzMin', obj.HzMin,...
+            'HzMax', obj.HzMax);
+        sp=ep.spectra;
+         % total epochs
+        teps=length(sp);
+         % number of valid epochs (discarding trailing epochs)
+         nepochs = teps - rem(teps, obj.Block);
+         
+        if isempty(obj.excluded)
+           sp=sp(:,1:nepochs);
+           rv=mean(sp,2,'omitnan');        
+        else
+        tex = ~obj.excluded;
+               sp=sp(:,1:nepochs);
+               sp1= sp(:,tex);
+               rv = mean(sp1,2,'omitnan');
+            end
+     end
+     
+     %EG.SPECTRUMTOTRAWBIN:returns the total spectrum power in each Hz-BIN 
+     %each bin time indipendently from vigilance state;
+     function rv = spectrumtotrawbin(obj)
+         
+           ep = EEpower(obj.EEG, ...
+            'SRate', obj.SRate, ...
+            'Ksize', obj.Ksize, ...
+            'Kover', obj.Kover,...
+            'HzMin', obj.HzMin,...
+            'HzMax', obj.HzMax);
+        sp=ep.spectra;
+        % total epochs
+        teps=length(sp);
+         % number of valid epochs (discarding trailing epochs)
+         nepochs = teps - rem(teps, obj.Block);
+         blocksize=[1,obj.Block];
+         FF= @(theBlockStructure) mean(theBlockStructure.data(:),'omitnan');
+      if isempty(obj.excluded)
+         rv = blockproc(sp(:,1:nepochs), blocksize, FF);
+      else
+          tex = ~obj.excluded;
+          sp(:,tex==0)=[NaN];
+          rv = blockproc(sp(:,1:nepochs), blocksize, FF);
+      end
+     end
+        
+            
+         %EG.ALLPOWER: returns the average power for the given All BAND,
+         % one value for Bin (if you specify 'Bin')and/or for state (if
+         % you specify 'state' 
+                         
+   function pwr= allpower(varargin);
+          narginchk(1,3);
+          [varargin{:}] = convertStringsToChars(varargin{:});
+          matches_bin = find(strcmpi('bin',varargin));
+          matches_state= find(strcmpi('state',varargin));
+          
+          
+    if any(matches_bin)& isempty(matches_state)
+        varargin(matches_bin)=[];
+        pwr = binallpower(varargin{:});
+    elseif any(matches_state)& any(matches_bin)
+        varargin([matches_bin,matches_state])=[];
+        pwr = binstateallpower(varargin{:});
+     elseif any(matches_state)& isempty(matches_bin)
+        varargin([matches_state])=[];
+        pwr = stateallpower(varargin{:});
+    else
+        pwr = generalpower(varargin{:}); 
+    end
+       end
+       
+     function rv= binallpower(obj)%total power for each bin
+           ep = EEpower(obj.EEG, ...
+            'SRate', obj.SRate, ...
+            'Ksize', obj.Ksize, ...
+            'Kover', obj.Kover,...
+            'All', obj.All);
+         pow = ep.bandpower('All');
+         % total epochs
+         teps = length(pow);
+         % number of valid epochs (discarding trailing epochs)
+         nepochs = teps - rem(teps, obj.Block);
+         % "blocked" power: values by, eg, hour
+         bpow = reshape(pow(1:nepochs), obj.Block, obj.nblocks);
+         % negate "excluded" and reshape to mimic the above
+        state_blocked=obj.blocked;
+
+         if isempty(obj.excluded)
+              for i=1:obj.nblocks
+               t1 = bpow(:,i);
+               rv(i) = mean(t1); %#ok<AGROW>
+            end
+             
+         else
+        tex = reshape(~obj.excluded, obj.Block, obj.nblocks);
+               for i=1:obj.nblocks
+               t1 = bpow(:,i);
+               t2 = t1(tex(:,i));
+               rv(i) = mean(t2,'omitnan'); %#ok<AGROW>
+            end
+         end
+     end
+       
+     function rv = binstateallpower(obj, band)
+                 ep = EEpower(obj.EEG, ...
+            'SRate', obj.SRate, ...
+            'Ksize', obj.Ksize, ...
+            'Kover', obj.Kover,...
+            'All', obj.All);
+         pow = ep.bandpower('All');
+         % total epochs
+         teps = length(pow);
+         % number of valid epochs (discarding trailing epochs)
+         nepochs = teps - rem(teps, obj.Block);
+         % "blocked" power: values by, eg, hour
+         bpow = reshape(pow(1:nepochs), obj.Block, obj.nblocks);
+         % negate "excluded" and reshape to mimic the above
+        state_blocked=obj.blocked;
+
+         if isempty(obj.excluded)
+             for s=1:obj.nstates
+            for i=1:obj.nblocks
+               t1 = bpow(:,i);
+               t2 = t1(state_blocked(:,i)==s);
+               rv(s,i) = mean(t2); %#ok<AGROW>
+            end
+             end
+         else
+        tex = reshape(~obj.excluded, obj.Block, obj.nblocks);
+         for s=1:obj.nstates
+            for i=1:obj.nblocks
+               t1 = bpow(:,i);
+               t2 = t1(state_blocked(:,i)==s & tex(:,i));
+               rv(s,i) = mean(t2,'omitnan'); %#ok<AGROW>
+            end
+         end
+         end
+                    end
+       
+     function rv = stateallpower(obj, band)
+            ep = EEpower(obj.EEG, ...
+            'SRate', obj.SRate, ...
+            'Ksize', obj.Ksize, ...
+            'Kover', obj.Kover,...
+            'All', obj.All);
+         pow = ep.bandpower('All');
+         
+         if isempty(obj.excluded)
+             for s=1:obj.nstates
+               t = pow(obj.Hypno==s);
+               rv(s,:) = mean(t); %#ok<AGROW>
+            end
+             
+         else
+        tex = ~obj.excluded;
+         for s=1:obj.nstates
+               t1 = pow(obj.Hypno'==s & tex);
+               rv(s,:) = mean(t1,'omitnan'); %#ok<AGROW>
+            end
+         end
+         
+                    end
+       
+     function rv = generalpower(obj, band)
+            ep = EEpower(obj.EEG, ...
+            'SRate', obj.SRate, ...
+            'Ksize', obj.Ksize, ...
+            'Kover', obj.Kover,...
+            'All', obj.All);
+         pow = ep.bandpower('All');
+         
+         if isempty(obj.excluded)
+             rv = mean(pow); %#ok<AGROW>
+            else
+        tex = ~obj.excluded;
+          rv = mean(pow(tex),'omitnan'); %#ok<AGROW>
+          end
+          
+   end
+         
+        % BANDPOWER(BAND): returns the average power for the given BAND,
          % one value per epoch, for the entire EEG
+       function rv = bandpower(obj, band)
          ep = EEpower(obj.EEG, ...
             'SRate', obj.SRate, ...
             'Ksize', obj.Ksize, ...
-            'Kover', obj.Kover);
+            'Kover', obj.Kover,...
+            'Delta', obj.Delta,...
+            'Theta', obj.Theta,...
+            'Alpha', obj.Alpha,...
+            'Beta', obj.Beta,...
+            'Gamma', obj.Gamma,...
+            'Sigma', obj.Sigma,...
+            'All', obj.All);
          pow = ep.bandpower(band);
          % total epochs
          teps = length(pow);
@@ -179,19 +567,33 @@ classdef EEGenie < handle
          % "blocked" power: values by, eg, hour
          bpow = reshape(pow(1:nepochs), obj.Block, obj.nblocks);
          % negate "excluded" and reshape to mimic the above
-         tex = reshape(~obj.excluded, obj.Block, obj.nblocks);
+        state_blocked=obj.blocked;
+
+         if isempty(obj.excluded)
+             for s=1:obj.nstates
+            for i=1:obj.nblocks
+               t1 = bpow(:,i);
+               t2 = t1(state_blocked(:,i)==s);
+               rv(s,i) = mean(t2); %#ok<AGROW>
+            end
+             end
+         else
+        tex = reshape(~obj.excluded, obj.Block, obj.nblocks);
          for s=1:obj.nstates
             for i=1:obj.nblocks
                t1 = bpow(:,i);
-               t2 = t1(obj.blocked==s & tex(:,i));
-               rv(s,i) = mean(t2); %#ok<AGROW>
+               t2 = t1(state_blocked(:,i)==s & tex(:,i));
+               rv(s,i) = mean(t2,'omitnan'); %#ok<AGROW>
             end
          end
-      end
-      
-      function filter_eeg(obj, fn)
-         % EG.FILTER_EEG applies a Butterworth notch and a bandpass
+         end
+       end
+       
+           
+       % EG.FILTER_EEG applies a Butterworth notch and a bandpass
          % chebyshev2 filter to the EEG vector
+      function filter_eeg(obj, fn)
+        
          if isempty(obj.EEG)
             disp('No EEG to filter')
             return
@@ -381,7 +783,8 @@ classdef EEGenie < handle
       function rv = blocked(obj)
          rv = reshape(obj.Hypno, obj.Block, obj.nblocks);
       end
-   end
+      end
+    
    
    methods %-------------------------------------------------------> EVENTS
       
@@ -516,7 +919,11 @@ classdef EEGenie < handle
       
       % find epoch number given an event's start_pos or finish_pos
       function rv = epoch_of_event(obj, pos)
+          if floor(pos / (obj.SRate * obj.Epoch))==obj.nEpochs;
+              rv=floor(pos / (obj.SRate * obj.Epoch));
+          else
          rv = floor(pos / (obj.SRate * obj.Epoch))+1;
+          end
       end
       
       %------------------------------------------------> PARAMETER UPDATING
